@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="FlavorForge: an offline-first scientific and culinary reaction simulator for Maillard browning, starch gelatinization, fermentation, and espresso extraction. Built for Hack Club FlavorTown, Boba Drops and Fraps.">
+<title>FlavorForge - Reaction and Fermentation Lab</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="chart-tooltip" class="ff-tooltip" role="status" aria-live="polite" hidden></div>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="48" height="48">
+          <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="M14 32 Q20 14 24 24 Q28 34 34 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="14" cy="32" r="2.4" fill="currentColor"/>
+          <circle cx="34" cy="16" r="2.4" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>FlavorForge</h1>
+        <p class="tagline">Reaction kinetics and fermentation lab for the curious kitchen</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="offline-badge" title="Runs entirely in your browser, no network needed">100% offline</span>
+      <button id="theme-toggle" class="btn btn-ghost" type="button" aria-pressed="false">Dark mode</button>
+    </div>
+  </div>
+  <div class="program-strip">
+    <span>Built for Hack Club YSWS:</span>
+    <a href="https://flavortown.hackclub.com" target="_blank" rel="noopener noreferrer">FlavorTown</a>
+    <span class="sep" aria-hidden="true">/</span>
+    <a href="https://fraps.hackclub.com" target="_blank" rel="noopener noreferrer">Boba Drops &amp; Fraps</a>
+    <span class="strip-note">Cook something, measure it, ship it.</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Lab sections">
+  <button role="tab" id="tabbtn-lab" aria-controls="tab-lab" aria-selected="true" class="tab active" data-tab="lab">Reaction Lab</button>
+  <button role="tab" id="tabbtn-dough" aria-controls="tab-dough" aria-selected="false" class="tab" data-tab="dough">Dough &amp; Starch</button>
+  <button role="tab" id="tabbtn-espresso" aria-controls="tab-espresso" aria-selected="false" class="tab" data-tab="espresso">Espresso</button>
+  <button role="tab" id="tabbtn-card" aria-controls="tab-card" aria-selected="false" class="tab" data-tab="card">Recipe Card</button>
+  <button role="tab" id="tabbtn-phase" aria-controls="tab-phase" aria-selected="false" class="tab" data-tab="phase">Phase Diagrams</button>
+  <button role="tab" id="tabbtn-data" aria-controls="tab-data" aria-selected="false" class="tab" data-tab="data">Data / JSON</button>
+</nav>
+
+<main>
+
+  <!-- ================= REACTION LAB ================= -->
+  <section id="tab-lab" class="tab-panel active" role="tabpanel" aria-labelledby="tabbtn-lab">
+    <div class="section-head">
+      <h2>Maillard browning (Arrhenius kinetics)</h2>
+      <p>Browning is a thermally activated reaction. Its rate follows <code>k = A &middot; exp(-Ea / (R &middot; T))</code>. Nudge the surface temperature and hydration to see how fast the crust develops.</p>
+    </div>
+
+    <div class="lab-grid">
+      <div class="panel controls">
+        <h3>Lab parameters</h3>
+        <div class="control">
+          <label for="range-surface">Surface temperature <span class="unit">deg C</span></label>
+          <div class="control-row">
+            <input id="range-surface" type="range" data-target="view" data-field="surfaceTempC" data-suffix=" C" min="100" max="240" step="1" value="180">
+            <output class="readout">180 C</output>
+          </div>
+        </div>
+        <div class="control">
+          <label for="range-hydration-lab">Dough hydration <span class="unit">% of flour</span></label>
+          <div class="control-row">
+            <input id="range-hydration-lab" type="range" data-target="recipe" data-field="hydrationPct" data-suffix="%" min="0" max="100" step="1" value="70">
+            <output class="readout">70%</output>
+          </div>
+        </div>
+        <div class="control">
+          <label for="num-ea">Activation energy Ea <span class="unit">kJ/mol</span></label>
+          <div class="control-row">
+            <input id="num-ea" type="number" data-target="view" data-field="EaKj" min="20" max="200" step="1" value="100">
+            <output class="readout">kJ/mol</output>
+          </div>
+        </div>
+        <p class="fineprint">Wet surfaces stay near 100 deg C while free water boils off, so higher hydration pushes the browning onset to a hotter surface.</p>
+      </div>
+
+      <div class="panel stat-panel">
+        <div class="stat-tile hero">
+          <span class="stat-label">Browning rate vs 150 C reference</span>
+          <span class="stat-value" data-tile="relativeBrowning">1.00x</span>
+          <span class="stat-delta" data-tile="relativeBrowningNote">at reference</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Q10 near this temperature</span>
+          <span class="stat-value" data-tile="q10">2.0</span>
+          <span class="stat-note">rate gain per +10 C</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Browning onset (this hydration)</span>
+          <span class="stat-value" data-tile="onset">158 C</span>
+          <span class="stat-note" data-tile="onsetNote">above / below target</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Half-life of reactants</span>
+          <span class="stat-value" data-tile="halfLife">0 min</span>
+          <span class="stat-note">at current temperature</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <div>
+          <h3>Browning rate vs temperature</h3>
+          <p class="chart-sub">Relative rate (150 deg C = 1). Single series, so no legend is needed.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-lab">Show data table</button>
+      </div>
+      <div id="chart-lab" class="chart-slot"></div>
+      <div id="table-lab" class="table-wrap" hidden></div>
+    </div>
+  </section>
+
+  <!-- ================= DOUGH & STARCH ================= -->
+  <section id="tab-dough" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-dough" hidden>
+    <div class="section-head">
+      <h2>Starch gelatinization and dough fermentation</h2>
+      <p>Gelatinization is a sigmoid: granules swell and lose crystallinity across a temperature band set by available water. Fermentation rises with heat (Arrhenius) until yeast proteins denature, giving an interior optimum.</p>
+    </div>
+
+    <div class="lab-grid">
+      <div class="panel controls">
+        <h3>Dough parameters</h3>
+        <div class="control">
+          <label for="range-hydration-dough">Hydration <span class="unit">% of flour</span></label>
+          <div class="control-row">
+            <input id="range-hydration-dough" type="range" data-target="recipe" data-field="hydrationPct" data-suffix="%" min="0" max="100" step="1" value="70">
+            <output class="readout">70%</output>
+          </div>
+        </div>
+        <div class="control">
+          <label for="range-ferment-temp">Fermentation temperature <span class="unit">deg C</span></label>
+          <div class="control-row">
+            <input id="range-ferment-temp" type="range" data-target="view" data-field="fermentTempC" data-suffix=" C" min="4" max="60" step="1" value="28">
+            <output class="readout">28 C</output>
+          </div>
+        </div>
+        <div class="control">
+          <label for="select-starch">Starch for the phase map</label>
+          <select id="select-starch" data-target="view" data-field="starchProfile">
+            <option value="tapioca">Boba / tapioca starch</option>
+            <option value="wheat">Sourdough / wheat starch</option>
+            <option value="potato">Potato starch</option>
+            <option value="rice">Rice starch</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel stat-panel">
+        <div class="stat-tile hero">
+          <span class="stat-label">Gelatinization midpoint Tm</span>
+          <span class="stat-value" data-tile="tm">0 C</span>
+          <span class="stat-delta" data-tile="tmProfile">profile</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Doubling time</span>
+          <span class="stat-value" data-tile="doubling">0 min</span>
+          <span class="stat-note" data-tile="doublingNote">at this temperature</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Fermentation rate</span>
+          <span class="stat-value" data-tile="fermentRel">1.0x</span>
+          <span class="stat-note">relative to 28 C</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">90% gelatinized at</span>
+          <span class="stat-value" data-tile="t90">0 C</span>
+          <span class="stat-note">practical cook target</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <div>
+          <h3>Gelatinization curves by starch</h3>
+          <p class="chart-sub">Three starch profiles at the current hydration. Curves converge at the top, so identity comes from the legend and tooltip.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-gel">Show data table</button>
+      </div>
+      <div class="legend" id="legend-gel" aria-label="Chart legend"></div>
+      <div id="chart-gel" class="chart-slot"></div>
+      <div id="table-gel" class="table-wrap" hidden></div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <div>
+          <h3>Dough rise over time</h3>
+          <p class="chart-sub">Logistic volume rise at the chosen fermentation temperature, normalized 0 to 1.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-rise">Show data table</button>
+      </div>
+      <div id="chart-rise" class="chart-slot"></div>
+      <div id="table-rise" class="table-wrap" hidden></div>
+    </div>
+  </section>
+
+  <!-- ================= ESPRESSO ================= -->
+  <section id="tab-espresso" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-espresso" hidden>
+    <div class="section-head">
+      <h2>Espresso extraction yield vs grind size</h2>
+      <p>Finer particles expose more surface area and resist flow, raising extraction yield. Find the grind that lands in the classic 18 to 22 percent balance window.</p>
+    </div>
+
+    <div class="lab-grid">
+      <div class="panel controls">
+        <h3>Shot parameters</h3>
+        <div class="control">
+          <label for="range-grind">Grind size <span class="unit">microns</span></label>
+          <div class="control-row">
+            <input id="range-grind" type="range" data-target="recipe" data-field="grindMicrons" data-suffix=" um" min="180" max="1400" step="10" value="600">
+            <output class="readout">600 um</output>
+          </div>
+        </div>
+        <div class="control">
+          <label for="range-target-yield">Target extraction yield <span class="unit">%</span></label>
+          <div class="control-row">
+            <input id="range-target-yield" type="range" data-target="recipe" data-field="targetYieldPct" data-suffix="%" min="15" max="23" step="0.1" value="20">
+            <output class="readout">20%</output>
+          </div>
+        </div>
+        <div class="control">
+          <label for="num-brewtemp">Brew temperature <span class="unit">deg C</span></label>
+          <div class="control-row">
+            <input id="num-brewtemp" type="number" data-target="recipe" data-field="brewTempC" min="80" max="100" step="1" value="93">
+            <output class="readout">deg C</output>
+          </div>
+        </div>
+        <div class="solve-box">
+          <span class="solve-label">Grind to hit the target yield</span>
+          <span class="solve-value" data-tile="solvedGrind">0 um</span>
+          <button id="apply-grind" class="btn btn-sm" type="button">Apply to grind slider</button>
+        </div>
+      </div>
+
+      <div class="panel stat-panel">
+        <div class="stat-tile hero">
+          <span class="stat-label">Extraction yield at current grind</span>
+          <span class="stat-value" data-tile="yield">20.0%</span>
+          <span class="stat-delta" data-tile="yieldWindow">Balanced / ideal</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Tasting note</span>
+          <span class="stat-note wide" data-tile="yieldNote">Sweet, syrupy, balanced acidity.</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Ideal window</span>
+          <span class="stat-value">18 - 22%</span>
+          <span class="stat-note">extraction yield</span>
+        </div>
+        <div class="stat-tile">
+          <span class="stat-label">Grind trend</span>
+          <span class="stat-note wide">Finer grind raises yield. Coarser grind lowers it.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <div>
+          <h3>Extraction yield vs grind size</h3>
+          <p class="chart-sub">Shaded band marks the balanced 18 to 22 percent window. The dot marks the current grind.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-esp">Show data table</button>
+      </div>
+      <div id="chart-esp" class="chart-slot"></div>
+      <div id="table-esp" class="table-wrap" hidden></div>
+    </div>
+  </section>
+
+  <!-- ================= RECIPE CARD ================= -->
+  <section id="tab-card" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-card" hidden>
+    <div class="section-head">
+      <h2>Printable lab recipe card</h2>
+      <p>A clean, print-ready card with baker's percentages, computed weights, process targets and an embedded phase snapshot. Use the print button for a paper copy.</p>
+    </div>
+
+    <div class="card-toolbar no-print">
+      <div class="control">
+        <label for="in-name">Recipe name</label>
+        <input id="in-name" type="text" data-target="recipe" data-field="name" value="House Sourdough and Boba Lab Card">
+      </div>
+      <div class="control">
+        <label for="in-style">Style</label>
+        <select id="in-style" data-target="recipe" data-field="style">
+          <option value="sourdough">Sourdough</option>
+          <option value="boba">Boba / tapioca</option>
+          <option value="espresso">Espresso</option>
+          <option value="hybrid">Hybrid lab</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="in-flour">Flour / base <span class="unit">g</span></label>
+        <input id="in-flour" type="number" data-target="recipe" data-field="flourGrams" min="1" max="100000" step="1" value="1000">
+      </div>
+      <div class="control">
+        <label for="in-salt">Salt <span class="unit">%</span></label>
+        <input id="in-salt" type="number" data-target="recipe" data-field="saltPct" min="0" max="10" step="0.1" value="2">
+      </div>
+      <div class="control">
+        <label for="in-starter">Starter <span class="unit">%</span></label>
+        <input id="in-starter" type="number" data-target="recipe" data-field="starterPct" min="0" max="100" step="1" value="20">
+      </div>
+      <div class="control wide-control">
+        <label for="in-notes">Lab notes</label>
+        <textarea id="in-notes" data-target="recipe" data-field="notes" rows="2">Log observations here. Keep water at the target temperature.</textarea>
+      </div>
+      <div class="card-actions">
+        <button id="print-card" class="btn" type="button">Print recipe card</button>
+        <button id="download-card-svg" class="btn btn-ghost" type="button">Download phase snapshot SVG</button>
+      </div>
+    </div>
+
+    <div id="recipe-card" class="recipe-card">
+      <div class="rc-head">
+        <div>
+          <div class="rc-kicker">FlavorForge lab card / YSWS submission</div>
+          <h2 id="rc-name">House Sourdough and Boba Lab Card</h2>
+          <div class="rc-style" id="rc-style">Sourdough</div>
+        </div>
+        <div class="rc-id">
+          <div>Formula ID</div>
+          <div class="rc-id-value" data-tile="rcId">FF-0000</div>
+          <div class="rc-date" data-tile="rcDate"></div>
+        </div>
+      </div>
+
+      <div class="rc-grid">
+        <div class="rc-block">
+          <h3>Formula (baker's percentages)</h3>
+          <table class="rc-table">
+            <thead><tr><th>Ingredient</th><th>%</th><th>Weight</th></tr></thead>
+            <tbody id="rc-formula"></tbody>
+          </table>
+          <div class="rc-total" data-tile="rcTotal">Total yield: 192% / 1920 g</div>
+        </div>
+        <div class="rc-block">
+          <h3>Process targets</h3>
+          <table class="rc-table rc-targets">
+            <tbody id="rc-targets"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="rc-block">
+        <h3>Phase snapshot</h3>
+        <div id="rc-phase" class="rc-phase-slot"></div>
+      </div>
+
+      <div class="rc-block">
+        <h3>Observations</h3>
+        <p class="rc-notes" id="rc-notes"></p>
+      </div>
+
+      <div class="rc-foot">
+        <span>FlavorForge / offline reaction and fermentation lab</span>
+        <span>flavortown.hackclub.com &middot; fraps.hackclub.com</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PHASE DIAGRAMS ================= -->
+  <section id="tab-phase" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-phase" hidden>
+    <div class="section-head">
+      <h2>Printable SVG phase diagrams</h2>
+      <p>Region maps that show which physical regime a given temperature, hydration or grind lands in. Each is a standalone SVG you can print or download.</p>
+    </div>
+
+    <div class="phase-grid">
+      <figure class="panel phase-figure">
+        <figcaption>
+          <h3>Maillard browning phase map</h3>
+          <p>Surface temperature vs hydration. Regions are labelled in place, so no color-only reading is needed.</p>
+        </figcaption>
+        <div id="phase-browning" class="phase-slot"></div>
+        <div class="phase-actions no-print">
+          <button class="btn btn-ghost btn-sm dl-svg" type="button" data-svg="phase-browning">Download SVG</button>
+        </div>
+      </figure>
+
+      <figure class="panel phase-figure">
+        <figcaption>
+          <h3>Starch gelatinization phase map</h3>
+          <p>Temperature vs hydration for the selected starch. The midline is the gelatinization midpoint Tm.</p>
+        </figcaption>
+        <div id="phase-gel" class="phase-slot"></div>
+        <div class="phase-actions no-print">
+          <button class="btn btn-ghost btn-sm dl-svg" type="button" data-svg="phase-gel">Download SVG</button>
+        </div>
+      </figure>
+
+      <figure class="panel phase-figure">
+        <figcaption>
+          <h3>Espresso extraction compass</h3>
+          <p>Grind size vs extraction yield, with the extraction curve over the tasting bands.</p>
+        </figcaption>
+        <div id="phase-esp" class="phase-slot"></div>
+        <div class="phase-actions no-print">
+          <button class="btn btn-ghost btn-sm dl-svg" type="button" data-svg="phase-esp">Download SVG</button>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ================= DATA / JSON ================= -->
+  <section id="tab-data" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-data" hidden>
+    <div class="section-head">
+      <h2>Recipe data (JSON import and export)</h2>
+      <p>Recipes are portable JSON. Copy, download, or paste one back in. Import validates the schema, version and every field before it changes the lab.</p>
+    </div>
+
+    <div class="data-grid">
+      <div class="panel">
+        <h3>Current recipe JSON</h3>
+        <textarea id="json-area" class="json-area" spellcheck="false" aria-label="Recipe JSON"></textarea>
+        <div class="data-actions">
+          <button id="refresh-json" class="btn btn-ghost btn-sm" type="button">Refresh from lab</button>
+          <button id="copy-json" class="btn btn-ghost btn-sm" type="button">Copy</button>
+          <button id="download-json" class="btn btn-ghost btn-sm" type="button">Download .json</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Import a recipe</h3>
+        <p class="fineprint">Paste JSON on the left (or below), then import. Invalid data is rejected with a clear message and the lab is left unchanged.</p>
+        <textarea id="import-area" class="json-area" spellcheck="false" aria-label="Paste recipe JSON to import" placeholder="{ &quot;schema&quot;: &quot;flavorforge/recipe&quot; ... }"></textarea>
+        <div class="data-actions">
+          <button id="import-json" class="btn btn-sm" type="button">Import JSON</button>
+          <button id="load-example" class="btn btn-ghost btn-sm" type="button">Load example</button>
+        </div>
+        <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
+        <h3 class="schema-title">Schema</h3>
+        <pre class="schema-block" id="schema-block"></pre>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>FlavorForge is a zero-dependency, offline-first educational simulator. Models are compact teaching approximations, not production process controls.</p>
+  <p>Submitted for Hack Club <a href="https://flavortown.hackclub.com" target="_blank" rel="noopener noreferrer">FlavorTown</a> and <a href="https://fraps.hackclub.com" target="_blank" rel="noopener noreferrer">Boba Drops / Fraps</a> YSWS.</p>
+</footer>
+
+<script src="kinetics.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var F = window.FlavorForge;
+  var C = F.constants;
+
+  // ---- state -------------------------------------------------------------
+  var recipe = F.createRecipe();
+  var view = {
+    surfaceTempC: 180,
+    fermentTempC: 28,
+    EaKj: 100,
+    starchProfile: 'tapioca'
+  };
+
+  // ---- small helpers -----------------------------------------------------
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmt(n, d) {
+    if (!isFinite(n)) { return '-'; }
+    var dec = (typeof d === 'number') ? d : 1;
+    return Number(n).toFixed(dec);
+  }
+  function fmtTick(n) {
+    if (Math.abs(n) >= 1000) { return (n / 1000) + 'k'; }
+    if (Number.isInteger(n)) { return String(n); }
+    return n.toFixed(1);
+  }
+  function clampNum(x, lo, hi) { return Math.min(hi, Math.max(lo, x)); }
+
+  function niceStep(range, target) {
+    var raw = range / target;
+    var mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var norm = raw / mag;
+    var step;
+    if (norm <= 1) { step = 1; }
+    else if (norm <= 2) { step = 2; }
+    else if (norm <= 2.5) { step = 2.5; }
+    else if (norm <= 5) { step = 5; }
+    else { step = 10; }
+    return step * mag;
+  }
+
+  function ticks(min, max, target) {
+    var step = niceStep(max - min, target || 5);
+    var out = [];
+    var start = Math.ceil(min / step) * step;
+    for (var v = start; v <= max + step * 0.001; v += step) {
+      if (v >= min - step * 0.001) { out.push(Math.round(v * 1e6) / 1e6); }
+    }
+    return out;
+  }
+
+  // ---- line chart --------------------------------------------------------
+  var VW = 760, VH = 380;
+  var ML = 62, MR = 104, MT = 26, MB = 54;
+  var PW = VW - ML - MR, PH = VH - MT - MB;
+
+  // cfg: { id, xValues, xLabel, yLabel, yMin, yMax, xMin, xMax,
+  //        series:[{name,color,values,dash?}], regions:[{x0,x1,y0,y1,color,opacity,label?}],
+  //        markers:[{x,y,color,label,dir?}], endLabel:[{index,text,color}], tableSample }
+  var chartStore = {};
+
+  function buildLineChart(cfg) {
+    var ink = cssVar('--ink'), ink2 = cssVar('--ink-2'),
+      muted = cssVar('--muted'), grid = cssVar('--grid'), axis = cssVar('--axis'),
+      surface = cssVar('--surface');
+    var xMin = cfg.xMin, xMax = cfg.xMax, yMin = cfg.yMin, yMax = cfg.yMax;
+
+    function sx(v) { return ML + (v - xMin) / (xMax - xMin) * PW; }
+    function sy(v) { return MT + (1 - (v - yMin) / (yMax - yMin)) * PH; }
+
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + VW + ' ' + VH + '" class="ff-chart" role="img" aria-label="' + esc(cfg.ariaLabel || cfg.yLabel + ' vs ' + cfg.xLabel) + '">');
+    s.push('<rect x="0" y="0" width="' + VW + '" height="' + VH + '" fill="' + surface + '"/>');
+
+    // horizontal gridlines + y ticks
+    ticks(yMin, yMax, 5).forEach(function (t) {
+      var y = sy(t);
+      s.push('<line x1="' + ML + '" y1="' + y.toFixed(1) + '" x2="' + (ML + PW) + '" y2="' + y.toFixed(1) + '" stroke="' + grid + '" stroke-width="1"/>');
+      s.push('<text x="' + (ML - 10) + '" y="' + y.toFixed(1) + '" text-anchor="end" dominant-baseline="middle" class="ff-tick">' + fmtTick(t) + '</text>');
+    });
+
+    // vertical gridlines + x ticks
+    ticks(xMin, xMax, 6).forEach(function (t) {
+      var x = sx(t);
+      s.push('<line x1="' + x.toFixed(1) + '" y1="' + MT + '" x2="' + x.toFixed(1) + '" y2="' + (MT + PH) + '" stroke="' + grid + '" stroke-width="1"/>');
+      s.push('<text x="' + x.toFixed(1) + '" y="' + (MT + PH + 20) + '" text-anchor="middle" class="ff-tick">' + fmtTick(t) + '</text>');
+    });
+
+    // axes
+    s.push('<line x1="' + ML + '" y1="' + MT + '" x2="' + ML + '" y2="' + (MT + PH) + '" stroke="' + axis + '" stroke-width="1.5"/>');
+    s.push('<line x1="' + ML + '" y1="' + (MT + PH) + '" x2="' + (ML + PW) + '" y2="' + (MT + PH) + '" stroke="' + axis + '" stroke-width="1.5"/>');
+
+    // shaded regions (behind the lines)
+    (cfg.regions || []).forEach(function (r) {
+      var x0 = sx(clampNum(r.x0, xMin, xMax)), x1 = sx(clampNum(r.x1, xMin, xMax));
+      var y0 = sy(clampNum(r.y1, yMin, yMax)), y1 = sy(clampNum(r.y0, yMin, yMax));
+      s.push('<rect x="' + x0.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + (x1 - x0).toFixed(1) + '" height="' + (y1 - y0).toFixed(1) + '" fill="' + r.color + '" fill-opacity="' + (r.opacity || 0.09) + '"/>');
+      if (r.label) {
+        s.push('<text x="' + ((x0 + x1) / 2).toFixed(1) + '" y="' + (y0 + 16) + '" text-anchor="middle" class="ff-region-label">' + esc(r.label) + '</text>');
+      }
+    });
+
+    // series paths
+    cfg.series.forEach(function (ser) {
+      var d = '';
+      ser.values.forEach(function (v, i) {
+        var px = sx(cfg.xValues[i]).toFixed(1);
+        var py = sy(v).toFixed(1);
+        d += (i === 0 ? 'M' : 'L') + px + ' ' + py + ' ';
+      });
+      s.push('<path d="' + d.trim() + '" fill="none" stroke="' + ser.color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"' + (ser.dash ? ' stroke-dasharray="' + ser.dash + '"' : '') + '/>');
+    });
+
+    // markers with a surface ring
+    (cfg.markers || []).forEach(function (m) {
+      var x = sx(m.x), y = sy(m.y);
+      s.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="5.5" fill="' + m.color + '" stroke="' + surface + '" stroke-width="2"/>');
+      if (m.label) {
+        var dx = m.dir === 'left' ? -10 : 10, anchor = m.dir === 'left' ? 'end' : 'start';
+        s.push('<text x="' + (x + dx).toFixed(1) + '" y="' + (y - 10).toFixed(1) + '" text-anchor="' + anchor + '" class="ff-mark-label">' + esc(m.label) + '</text>');
+      }
+    });
+
+    // selective end labels (single series only, no collision)
+    (cfg.endLabels || []).forEach(function (e) {
+      var ser = cfg.series[e.index];
+      var x = sx(cfg.xValues[cfg.xValues.length - 1]);
+      var y = sy(ser.values[ser.values.length - 1]);
+      s.push('<text x="' + (x + 9).toFixed(1) + '" y="' + (y - 8).toFixed(1) + '" text-anchor="start" class="ff-end-label">' + esc(e.text) + '</text>');
+    });
+
+    // axis titles
+    s.push('<text x="' + (ML + PW / 2) + '" y="' + (VH - 6) + '" text-anchor="middle" class="ff-axis-title">' + esc(cfg.xLabel) + '</text>');
+    s.push('<text transform="translate(14 ' + (MT + PH / 2) + ') rotate(-90)" text-anchor="middle" class="ff-axis-title">' + esc(cfg.yLabel) + '</text>');
+
+    // crosshair + hover overlay
+    s.push('<line class="ff-crosshair" x1="0" y1="' + MT + '" x2="0" y2="' + (MT + PH) + '" stroke="' + ink2 + '" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>');
+    s.push('<rect class="ff-hover" x="' + ML + '" y="' + MT + '" width="' + PW + '" height="' + PH + '" fill="transparent"/>');
+    s.push('</svg>');
+
+    chartStore[cfg.id] = {
+      xValues: cfg.xValues, xMin: xMin, xMax: xMax, sx: sx,
+      series: cfg.series, xLabel: cfg.xLabel, yLabel: cfg.yLabel
+    };
+
+    // compact data table (sampled)
+    var stepN = cfg.tableSample || Math.max(1, Math.ceil(cfg.xValues.length / 10));
+    var cols = [{ label: cfg.xLabel, key: 'x' }].concat(cfg.series.map(function (ser) {
+      return { label: ser.name, key: ser.name };
+    }));
+    var rows = [];
+    for (var i = 0; i < cfg.xValues.length; i += stepN) {
+      var row = { x: fmtTick(Math.round(cfg.xValues[i] * 100) / 100) };
+      cfg.series.forEach(function (ser) { row[ser.name] = fmt(ser.values[i], 3); });
+      rows.push(row);
+    }
+    return { svg: s.join(''), table: buildTable(cols, rows) };
+  }
+
+  function buildTable(cols, rows) {
+    var h = '<table class="data-table"><thead><tr>';
+    cols.forEach(function (c) { h += '<th scope="col">' + esc(c.label) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    rows.forEach(function (r) {
+      h += '<tr>';
+      cols.forEach(function (c) { h += '<td>' + esc(r[c.key]) + '</td>'; });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+  }
+
+  function attachHover(containerId) {
+    var el = document.getElementById(containerId);
+    if (!el) { return; }
+    var svg = el.querySelector('svg');
+    var overlay = el.querySelector('.ff-hover');
+    var cross = el.querySelector('.ff-crosshair');
+    if (!svg || !overlay) { return; }
+    var data = chartStore[containerId];
+    var tip = document.getElementById('chart-tooltip');
+
+    overlay.addEventListener('pointermove', function (ev) {
+      var rect = svg.getBoundingClientRect();
+      var vbX = (ev.clientX - rect.left) * VW / rect.width;
+      var xVal = data.xMin + (vbX - ML) / PW * (data.xMax - data.xMin);
+      // nearest sample index
+      var best = 0, bd = Infinity;
+      for (var i = 0; i < data.xValues.length; i++) {
+        var d = Math.abs(data.xValues[i] - xVal);
+        if (d < bd) { bd = d; best = i; }
+      }
+      var px = data.sx(data.xValues[best]);
+      cross.setAttribute('x1', px); cross.setAttribute('x2', px);
+      cross.setAttribute('visibility', 'visible');
+      var html = '<strong>' + esc(data.xLabel) + ': ' + fmtTick(Math.round(data.xValues[best] * 100) / 100) + '</strong>';
+      data.series.forEach(function (ser) {
+        html += '<div class="tt-row"><span class="tt-swatch" style="background:' + ser.color + '"></span>' +
+          esc(ser.name) + ': <b>' + fmt(ser.values[best], 3) + '</b></div>';
+      });
+      tip.innerHTML = html;
+      tip.hidden = false;
+      var wrapRect = el.getBoundingClientRect();
+      tip.style.left = (ev.clientX - wrapRect.left + 14) + 'px';
+      tip.style.top = (ev.clientY - wrapRect.top + 12) + 'px';
+    });
+    overlay.addEventListener('pointerleave', function () {
+      cross.setAttribute('visibility', 'hidden');
+      tip.hidden = true;
+    });
+  }
+
+  function setChart(containerId, cfg) {
+    var result = buildLineChart(cfg);
+    document.getElementById(containerId).innerHTML = result.svg;
+    var tableId = containerId.replace('chart-', 'table-');
+    var t = document.getElementById(tableId);
+    if (t) { t.innerHTML = result.table; }
+    attachHover(containerId);
+  }
+
+  function setLegend(id, series) {
+    var el = document.getElementById(id);
+    if (!el) { return; }
+    el.innerHTML = series.map(function (s) {
+      return '<span class="legend-item"><span class="legend-key" style="background:' + s.color + '"></span>' + esc(s.name) + '</span>';
+    }).join('');
+  }
+
+  // ---- phase diagrams (region maps) -------------------------------------
+  function phaseFrame(opts) {
+    var ink = cssVar('--ink'), muted = cssVar('--muted'), axis = cssVar('--axis'),
+      grid = cssVar('--grid'), surface = cssVar('--surface');
+    var W = 560, H = 380, L = 62, R = 22, T = 18, B = 52;
+    var pw = W - L - R, ph = H - T - B;
+    var xMin = opts.xMin, xMax = opts.xMax, yMin = opts.yMin, yMax = opts.yMax;
+    function sx(v) { return L + (v - xMin) / (xMax - xMin) * pw; }
+    function sy(v) { return T + (1 - (v - yMin) / (yMax - yMin)) * ph; }
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + W + ' ' + H + '" class="ff-phase" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + esc(opts.ariaLabel || opts.title) + '">');
+    s.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="' + surface + '"/>');
+    s.push('<text x="' + (L) + '" y="' + (T - 4) + '" class="ff-phase-title">' + esc(opts.title) + '</text>');
+
+    // regions as polygons + in-place labels
+    opts.regions.forEach(function (r) {
+      var pts = r.poly.map(function (p) { return sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1); }).join(' ');
+      s.push('<polygon points="' + pts + '" fill="' + r.color + '" fill-opacity="' + (r.opacity || 0.14) + '"/>');
+    });
+
+    // gridlines + ticks
+    ticks(yMin, yMax, 5).forEach(function (t) {
+      var y = sy(t);
+      s.push('<line x1="' + L + '" y1="' + y.toFixed(1) + '" x2="' + (L + pw) + '" y2="' + y.toFixed(1) + '" stroke="' + grid + '" stroke-width="1"/>');
+      s.push('<text x="' + (L - 8) + '" y="' + y.toFixed(1) + '" text-anchor="end" dominant-baseline="middle" class="ff-tick">' + fmtTick(t) + '</text>');
+    });
+    ticks(xMin, xMax, 6).forEach(function (t) {
+      var x = sx(t);
+      s.push('<line x1="' + x.toFixed(1) + '" y1="' + T + '" x2="' + x.toFixed(1) + '" y2="' + (T + ph) + '" stroke="' + grid + '" stroke-width="1"/>');
+      s.push('<text x="' + x.toFixed(1) + '" y="' + (T + ph + 18) + '" text-anchor="middle" class="ff-tick">' + fmtTick(t) + '</text>');
+    });
+
+    // boundary lines
+    (opts.lines || []).forEach(function (ln) {
+      var d = ln.pts.map(function (p, i) { return (i === 0 ? 'M' : 'L') + sx(p[0]).toFixed(1) + ' ' + sy(p[1]).toFixed(1); }).join(' ');
+      s.push('<path d="' + d + '" fill="none" stroke="' + ln.color + '" stroke-width="2" stroke-dasharray="' + (ln.dash || '0') + '"/>');
+    });
+
+    // in-place region labels (identity never color alone)
+    (opts.labels || []).forEach(function (lb) {
+      s.push('<text x="' + sx(lb.x).toFixed(1) + '" y="' + sy(lb.y).toFixed(1) + '" text-anchor="middle" class="ff-region-label strong">' + esc(lb.text) + '</text>');
+    });
+
+    // markers
+    (opts.markers || []).forEach(function (m) {
+      s.push('<circle cx="' + sx(m.x).toFixed(1) + '" cy="' + sy(m.y).toFixed(1) + '" r="5.5" fill="' + m.color + '" stroke="' + surface + '" stroke-width="2"/>');
+      if (m.text) {
+        s.push('<text x="' + (sx(m.x) + 9).toFixed(1) + '" y="' + (sy(m.y) - 8).toFixed(1) + '" class="ff-mark-label">' + esc(m.text) + '</text>');
+      }
+    });
+
+    s.push('<line x1="' + L + '" y1="' + T + '" x2="' + L + '" y2="' + (T + ph) + '" stroke="' + axis + '" stroke-width="1.5"/>');
+    s.push('<line x1="' + L + '" y1="' + (T + ph) + '" x2="' + (L + pw) + '" y2="' + (T + ph) + '" stroke="' + axis + '" stroke-width="1.5"/>');
+    s.push('<text x="' + (L + pw / 2) + '" y="' + (H - 6) + '" text-anchor="middle" class="ff-axis-title">' + esc(opts.xLabel) + '</text>');
+    s.push('<text transform="translate(14 ' + (T + ph / 2) + ') rotate(-90)" text-anchor="middle" class="ff-axis-title">' + esc(opts.yLabel) + '</text>');
+    s.push('</svg>');
+    return s.join('');
+  }
+
+  function browningPhaseSVG() {
+    var s3 = cssVar('--s3'), bad = cssVar('--s2');
+    var xMin = 0, xMax = 100, yMin = 100, yMax = 240;
+    function onset(h) { return F.browningOnsetTemp(h); }
+    // lower boundary = onset line; upper boundary = scorch line (onset + 70, capped)
+    function scorch(h) { return Math.min(yMax, onset(h) + 70); }
+    var pale = [[xMin, yMin], [xMax, yMin], [xMax, onset(xMax)], [xMin, onset(xMin)]];
+    var mill = [[xMin, onset(xMin)], [xMax, onset(xMax)], [xMax, scorch(xMax)], [xMin, scorch(xMin)]];
+    var burn = [[xMin, scorch(xMin)], [xMax, scorch(xMax)], [xMax, yMax], [xMin, yMax]];
+    var opts = {
+      title: 'Browning regimes',
+      xLabel: 'Hydration (% of flour)', yLabel: 'Surface temperature (deg C)',
+      xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax,
+      ariaLabel: 'Maillard browning phase map: temperature versus hydration with pale, browning and scorching regions',
+      regions: [
+        { poly: pale, color: cssVar('--muted'), opacity: 0.10 },
+        { poly: mill, color: s3, opacity: 0.16 },
+        { poly: burn, color: bad, opacity: 0.16 }
+      ],
+      lines: [
+        { pts: [[xMin, onset(xMin)], [xMax, onset(xMax)]], color: cssVar('--ink-2'), dash: '5 4' },
+        { pts: [[xMin, scorch(xMin)], [xMax, scorch(xMax)]], color: bad, dash: '5 4' }
+      ],
+      labels: [
+        { x: 30, y: 118, text: 'Pale / wet surface' },
+        { x: 50, y: onset(50) + 30, text: 'Maillard browning' },
+        { x: 50, y: Math.min(232, scorch(50) + 14), text: 'Scorching / pyrolysis' }
+      ],
+      markers: [{ x: recipe.hydrationPct, y: clampNum(view.surfaceTempC, yMin, yMax), color: cssVar('--s1'), text: 'your set point' }]
+    };
+    return phaseFrame(opts);
+  }
+
+  function gelPhaseSVG() {
+    var p = F.STARCH_PROFILES[view.starchProfile] || F.STARCH_PROFILES.tapioca;
+    var s3 = cssVar('--s3'), s1 = cssVar('--s1');
+    var xMin = 0, xMax = 100, yMin = 40, yMax = 100;
+    function tm(h) { return F.gelatinizationMidpoint(h, p); }
+    function top(h) { return Math.min(yMax, tm(h) + 9); }
+    function bot(h) { return Math.max(yMin, tm(h) - 9); }
+    var raw = [[xMin, yMin], [xMax, yMin], [xMax, bot(xMax)], [xMin, bot(xMin)]];
+    var band = [[xMin, bot(xMin)], [xMax, bot(xMax)], [xMax, top(xMax)], [xMin, top(xMin)]];
+    var done = [[xMin, top(xMin)], [xMax, top(xMax)], [xMax, yMax], [xMin, yMax]];
+    return phaseFrame({
+      title: p.label + ' phase map',
+      xLabel: 'Hydration (% of flour)', yLabel: 'Temperature (deg C)',
+      xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax,
+      ariaLabel: 'Starch gelatinization phase map: temperature versus hydration with raw, gelatinizing and gelatinized regions',
+      regions: [
+        { poly: raw, color: cssVar('--muted'), opacity: 0.10 },
+        { poly: band, color: s1, opacity: 0.16 },
+        { poly: done, color: s3, opacity: 0.16 }
+      ],
+      lines: [{ pts: [[xMin, tm(xMin)], [xMax, tm(xMax)]], color: cssVar('--ink'), dash: '5 4' }],
+      labels: [
+        { x: 25, y: 48, text: 'Raw / crystalline' },
+        { x: 50, y: tm(50), text: 'Gelatinizing' },
+        { x: 50, y: 95, text: 'Gelatinized / swollen' }
+      ],
+      markers: [{ x: recipe.hydrationPct, y: clampNum(view.surfaceTempC, yMin, yMax), color: cssVar('--s2'), text: 'set point' }]
+    });
+  }
+
+  function espPhaseSVG() {
+    var o = C.ESPRESSO_DEFAULT;
+    var s1 = cssVar('--s1'), s3 = cssVar('--s3'), s2 = cssVar('--s2');
+    var xMin = o.gmin, xMax = o.gmax, yMin = 14, yMax = 24;
+    var curve = [];
+    for (var g = xMin; g <= xMax; g += 20) { curve.push([g, F.extractionYield(g, o)]); }
+    return phaseFrame({
+      title: 'Extraction compass',
+      xLabel: 'Grind size (microns)', yLabel: 'Extraction yield (%)',
+      xMin: xMin, xMax: xMax, yMin: yMin, yMax: yMax,
+      ariaLabel: 'Espresso extraction compass: grind size versus extraction yield with under, balanced and over-extracted bands',
+      regions: [
+        { poly: [[xMin, 18], [xMax, 18], [xMax, 22], [xMin, 22]], color: s3, opacity: 0.18 },
+        { poly: [[xMin, 22], [xMax, 22], [xMax, 24], [xMin, 24]], color: s2, opacity: 0.12 }
+      ],
+      lines: [
+        { pts: [[xMin, 18], [xMax, 18]], color: s3, dash: '5 4' },
+        { pts: [[xMin, 22], [xMax, 22]], color: s2, dash: '5 4' },
+        { pts: curve, color: s1, dash: '0' }
+      ],
+      labels: [
+        { x: 1150, y: 16.3, text: 'Under-extracted' },
+        { x: 1150, y: 20, text: 'Balanced (18 - 22%)' },
+        { x: 1150, y: 23.2, text: 'Over-extracted' }
+      ],
+      markers: [{ x: recipe.grindMicrons, y: clampNum(F.extractionYield(recipe.grindMicrons, o), yMin, yMax), color: cssVar('--ink'), text: 'current grind' }]
+    });
+  }
+
+  // ---- derived values ----------------------------------------------------
+  function computeDerived() {
+    var o = C.MAILLARD_DEFAULT;
+    var maillard = { A: o.A, Ea: view.EaKj * 1000, refC: o.refC };
+    var rel = F.relativeBrowning(view.surfaceTempC, maillard);
+    var k = F.maillardRate(view.surfaceTempC, maillard);
+    var onset = F.browningOnsetTemp(recipe.hydrationPct);
+    var p = F.STARCH_PROFILES[view.starchProfile] || F.STARCH_PROFILES.tapioca;
+    var tm = F.gelatinizationMidpoint(recipe.hydrationPct, p);
+    var t90 = tm + Math.log(9) / p.steepness;
+    var doubling = F.doublingTime(view.fermentTempC);
+    var yieldPct = F.extractionYield(recipe.grindMicrons);
+    var ewin = F.extractionWindow(yieldPct);
+    var solved = null;
+    try { solved = F.solveGrindForYield(recipe.targetYieldPct); } catch (e) { solved = null; }
+    var scaled = F.scaleRecipe(recipe.flourGrams, {
+      water: recipe.hydrationPct, salt: recipe.saltPct, starter: recipe.starterPct
+    });
+    return {
+      maillard: maillard, rel: rel, k: k, onset: onset, q10v: F.q10(maillard.Ea, view.surfaceTempC),
+      halfLife: F.halfLife(k), p: p, tm: tm, t90: t90, doubling: doubling,
+      fermentRel: F.fermentationRelative(view.fermentTempC),
+      yieldPct: yieldPct, ewin: ewin, solved: solved, scaled: scaled
+    };
+  }
+
+  // ---- render ------------------------------------------------------------
+  var rafPending = false;
+  function scheduleRender() {
+    if (rafPending) { return; }
+    rafPending = true;
+    requestAnimationFrame(function () { rafPending = false; render(); });
+  }
+
+  function tile(name, value) {
+    document.querySelectorAll('[data-tile="' + name + '"]').forEach(function (el) {
+      el.textContent = value;
+    });
+  }
+
+  function render() {
+    var d = computeDerived();
+    var s1 = cssVar('--s1'), s2 = cssVar('--s2'), s3 = cssVar('--s3');
+
+    // ----- stat tiles: reaction lab
+    tile('relativeBrowning', fmt(d.rel, 2) + 'x');
+    tile('relativeBrowningNote', d.rel >= 1 ? 'faster than reference' : 'slower than reference');
+    tile('q10', fmt(d.q10v, 2) + 'x');
+    tile('onset', fmt(d.onset, 0) + ' C');
+    tile('onsetNote', view.surfaceTempC >= d.onset ? 'surface is hot enough' : 'too cool to brown yet');
+    tile('halfLife', d.halfLife >= 600 ? fmt(d.halfLife / 60, 1) + ' h' : fmt(d.halfLife, 1) + ' min');
+
+    // ----- stat tiles: dough
+    tile('tm', fmt(d.tm, 1) + ' C');
+    tile('tmProfile', d.p.label);
+    tile('doubling', d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min');
+    tile('doublingNote', view.fermentTempC > 46 ? 'yeast stressed by heat' : 'healthy fermentation');
+    tile('fermentRel', fmt(d.fermentRel, 2) + 'x');
+    tile('t90', fmt(d.t90, 1) + ' C');
+
+    // ----- stat tiles: espresso
+    tile('yield', fmt(d.yieldPct, 1) + '%');
+    tile('yieldWindow', d.ewin.label);
+    tile('yieldNote', d.ewin.note);
+    tile('solvedGrind', d.solved === null ? 'out of range' : fmt(d.solved, 0) + ' um');
+
+    // ----- chart: browning (single series)
+    var btemps = [], brels = [];
+    for (var t = 100; t <= 240; t += 2) { btemps.push(t); brels.push(F.relativeBrowning(t, d.maillard)); }
+    var bMax = Math.max(2, Math.ceil(brels[brels.length - 1]));
+    setChart('chart-lab', {
+      id: 'chart-lab', xValues: btemps, xMin: 100, xMax: 240, yMin: 0, yMax: bMax,
+      xLabel: 'Surface temperature (deg C)', yLabel: 'Relative browning rate',
+      ariaLabel: 'Relative Maillard browning rate versus surface temperature',
+      series: [{ name: 'Relative rate', color: s1, values: brels }],
+      regions: [{ x0: 100, x1: 240, y0: 0, y1: 1, color: s3, opacity: 0.06 }],
+      markers: [
+        { x: view.surfaceTempC, y: clampNum(d.rel, 0, bMax), color: s2, label: 'set point', dir: (view.surfaceTempC > 200 ? 'left' : 'right') },
+        { x: d.onset, y: 0.1, color: s3, label: 'onset ' + fmt(d.onset, 0) + ' C', dir: 'right' }
+      ],
+      endLabels: [{ index: 0, text: fmt(brels[brels.length - 1], 1) + 'x' }],
+      tableSample: 7
+    });
+
+    // ----- chart: gelatinization (3 series, legend + tooltip, no end labels)
+    var gtemp = [], gelSeries = [];
+    var profKeys = ['tapioca', 'wheat', 'potato'];
+    var profColors = [s1, s2, s3];
+    for (var gt = 40; gt <= 100; gt += 1) { gtemp.push(gt); }
+    profKeys.forEach(function (key, idx) {
+      var prof = F.STARCH_PROFILES[key];
+      gelSeries.push({
+        name: prof.label.split(' / ')[0], color: profColors[idx],
+        values: gtemp.map(function (tt) { return F.gelatinizationDegree(tt, recipe.hydrationPct, prof); })
+      });
+    });
+    setLegend('legend-gel', gelSeries);
+    setChart('chart-gel', {
+      id: 'chart-gel', xValues: gtemp, xMin: 40, xMax: 100, yMin: 0, yMax: 1,
+      xLabel: 'Temperature (deg C)', yLabel: 'Degree of gelatinization (0 - 1)',
+      ariaLabel: 'Degree of starch gelatinization versus temperature for tapioca, wheat and potato starch',
+      series: gelSeries,
+      markers: [{ x: d.tm, y: 0.5, color: cssVar('--ink'), label: 'Tm ' + fmt(d.tm, 0) + ' C' }],
+      tableSample: 6
+    });
+
+    // ----- chart: dough rise
+    var rtimes = [], rvals = [];
+    var rMax = Math.max(240, d.doubling * 4);
+    for (var rt = 0; rt <= rMax; rt += rMax / 80) { rtimes.push(rt); rvals.push(F.doughRise(rt, view.fermentTempC)); }
+    setChart('chart-rise', {
+      id: 'chart-rise', xValues: rtimes, xMin: 0, xMax: rMax, yMin: 0, yMax: 1,
+      xLabel: 'Time (minutes)', yLabel: 'Relative dough volume (0 - 1)',
+      ariaLabel: 'Relative dough volume rise versus time at the chosen fermentation temperature',
+      series: [{ name: 'Dough rise', color: s1, values: rvals }],
+      markers: [{ x: d.doubling, y: F.doughRise(d.doubling, view.fermentTempC), color: s2, label: 'doubling ' + (d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'), dir: 'right' }],
+      endLabels: [{ index: 0, text: 'fully risen' }],
+      tableSample: 8
+    });
+
+    // ----- chart: extraction
+    var o = C.ESPRESSO_DEFAULT;
+    var egrinds = [], eys = [];
+    for (var g = o.gmin; g <= o.gmax; g += 20) { egrinds.push(g); eys.push(F.extractionYield(g, o)); }
+    setChart('chart-esp', {
+      id: 'chart-esp', xValues: egrinds, xMin: o.gmin, xMax: o.gmax, yMin: 14, yMax: 24,
+      xLabel: 'Grind size (microns)', yLabel: 'Extraction yield (%)',
+      ariaLabel: 'Espresso extraction yield versus grind size with the balanced 18 to 22 percent window shaded',
+      series: [{ name: 'Extraction yield', color: s1, values: eys }],
+      regions: [{ x0: o.gmin, x1: o.gmax, y0: 18, y1: 22, color: s3, opacity: 0.13, label: 'balanced 18 - 22%' }],
+      markers: [{ x: recipe.grindMicrons, y: clampNum(d.yieldPct, 14, 24), color: s2, label: fmt(d.yieldPct, 1) + '%', dir: (recipe.grindMicrons > 1000 ? 'left' : 'right') }],
+      endLabels: [{ index: 0, text: fmt(eys[eys.length - 1], 1) + '%' }],
+      tableSample: 6
+    });
+
+    // ----- phase diagrams
+    document.getElementById('phase-browning').innerHTML = browningPhaseSVG();
+    document.getElementById('phase-gel').innerHTML = gelPhaseSVG();
+    document.getElementById('phase-esp').innerHTML = espPhaseSVG();
+
+    // ----- recipe card
+    renderRecipeCard(d);
+
+    // ----- JSON
+    var jsonArea = document.getElementById('json-area');
+    if (jsonArea && document.activeElement !== jsonArea) {
+      jsonArea.value = F.exportRecipe(recipe);
+    }
+  }
+
+  function renderRecipeCard(d) {
+    tile('rcId', 'FF-' + String(Math.round(recipe.flourGrams + recipe.hydrationPct * 7 + recipe.grindMicrons)).slice(-4).padStart(4, '0'));
+    tile('rcDate', new Date().toISOString().slice(0, 10));
+    document.getElementById('rc-name').textContent = recipe.name || 'Untitled formula';
+    var styleLabels = { sourdough: 'Sourdough', boba: 'Boba / tapioca', espresso: 'Espresso', hybrid: 'Hybrid lab' };
+    document.getElementById('rc-style').textContent = styleLabels[recipe.style] || recipe.style;
+    document.getElementById('rc-notes').textContent = recipe.notes || 'No observations logged yet.';
+
+    var w = d.scaled.weights;
+    var rows = [
+      ['Flour / base', '100', fmt(w.flour, 0) + ' g'],
+      ['Water', fmt(recipe.hydrationPct, 1), fmt(w.water, 0) + ' g'],
+      ['Salt', fmt(recipe.saltPct, 1), fmt(w.salt, 0) + ' g'],
+      ['Starter', fmt(recipe.starterPct, 1), fmt(w.starter, 0) + ' g']
+    ];
+    document.getElementById('rc-formula').innerHTML = rows.map(function (r) {
+      return '<tr><td>' + esc(r[0]) + '</td><td>' + esc(r[1]) + '%</td><td>' + esc(r[2]) + '</td></tr>';
+    }).join('');
+    tile('rcTotal', 'Total yield ' + fmt(d.scaled.totalPercent, 1) + '% / ' + fmt(d.scaled.totalWeight, 0) + ' g');
+
+    var targets = [
+      ['Hydration', fmt(recipe.hydrationPct, 1) + ' %'],
+      ['Gelatinization midpoint', fmt(d.tm, 1) + ' deg C (' + d.p.label.split(' / ')[0] + ')'],
+      ['Fermentation temp', fmt(view.fermentTempC, 0) + ' deg C'],
+      ['Doubling time', d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'],
+      ['Browning onset', fmt(d.onset, 0) + ' deg C at this hydration'],
+      ['Espresso grind', fmt(recipe.grindMicrons, 0) + ' um'],
+      ['Extraction yield', fmt(d.yieldPct, 1) + ' % (' + d.ewin.label + ')'],
+      ['Brew temperature', fmt(recipe.brewTempC, 0) + ' deg C']
+    ];
+    document.getElementById('rc-targets').innerHTML = targets.map(function (r) {
+      return '<tr><th scope="row">' + esc(r[0]) + '</th><td>' + esc(r[1]) + '</td></tr>';
+    }).join('');
+
+    // embedded phase snapshot (browning map, compact)
+    document.getElementById('rc-phase').innerHTML = browningPhaseSVG();
+  }
+
+  // ---- control binding ---------------------------------------------------
+  function readout(val, ds) {
+    var suffix = ds.suffix || '';
+    var decimals = ds.decimals;
+    var num = Number(val);
+    var text = (decimals !== undefined) ? num.toFixed(Number(decimals)) : (Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10));
+    return text + suffix;
+  }
+
+  function applyField(el) {
+    var scope = el.dataset.target === 'view' ? view : recipe;
+    var val;
+    if (el.type === 'number' || el.type === 'range') {
+      val = parseFloat(el.value);
+      if (isNaN(val)) { return; }
+    } else {
+      val = el.value;
+    }
+    scope[el.dataset.field] = val;
+    var out = el.parentElement ? el.parentElement.querySelector('output.readout') : null;
+    if (out && (el.type === 'range' || el.type === 'number')) {
+      // number inputs with a static unit label keep their fixed output text
+      if (el.dataset.suffix !== undefined) { out.textContent = readout(val, el.dataset); }
+    }
+    scheduleRender();
+  }
+
+  document.querySelectorAll('[data-field]').forEach(function (el) {
+    el.addEventListener('input', function () { applyField(el); });
+    el.addEventListener('change', function () { applyField(el); });
+  });
+
+  function syncControls() {
+    document.querySelectorAll('[data-field]').forEach(function (el) {
+      var scope = el.dataset.target === 'view' ? view : recipe;
+      var val = scope[el.dataset.field];
+      if (val === undefined) { return; }
+      el.value = val;
+      var out = el.parentElement ? el.parentElement.querySelector('output.readout') : null;
+      if (out && el.dataset.suffix !== undefined) { out.textContent = readout(val, el.dataset); }
+    });
+  }
+
+  // ---- tabs --------------------------------------------------------------
+  document.querySelectorAll('.tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var name = btn.dataset.tab;
+      document.querySelectorAll('.tab').forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      document.querySelectorAll('.tab-panel').forEach(function (p) {
+        var on = p.id === 'tab-' + name;
+        p.classList.toggle('active', on);
+        p.hidden = !on;
+      });
+    });
+  });
+
+  // ---- table toggles -----------------------------------------------------
+  document.querySelectorAll('.table-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var t = document.getElementById(btn.dataset.table);
+      if (!t) { return; }
+      var willShow = t.hidden;
+      t.hidden = !willShow;
+      btn.textContent = willShow ? 'Hide data table' : 'Show data table';
+      btn.setAttribute('aria-expanded', willShow ? 'true' : 'false');
+    });
+  });
+
+  // ---- theme -------------------------------------------------------------
+  var themeBtn = document.getElementById('theme-toggle');
+  function setTheme(mode) {
+    document.documentElement.setAttribute('data-theme', mode);
+    var dark = mode === 'dark';
+    themeBtn.textContent = dark ? 'Light mode' : 'Dark mode';
+    themeBtn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    try { localStorage.setItem('ff-theme', mode); } catch (e) { /* storage may be unavailable offline */ }
+    render();
+  }
+  themeBtn.addEventListener('click', function () {
+    setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
+  (function initTheme() {
+    var saved = 'light';
+    try { saved = localStorage.getItem('ff-theme') || 'light'; } catch (e) { /* ignore */ }
+    setTheme(saved);
+  })();
+
+  // ---- espresso solver apply --------------------------------------------
+  document.getElementById('apply-grind').addEventListener('click', function () {
+    var d = computeDerived();
+    if (d.solved === null) { return; }
+    recipe.grindMicrons = Math.round(d.solved);
+    syncControls();
+    render();
+  });
+
+  // ---- print -------------------------------------------------------------
+  document.getElementById('print-card').addEventListener('click', function () { window.print(); });
+
+  // ---- SVG download ------------------------------------------------------
+  function downloadSVG(containerId, filename) {
+    var svgEl = document.querySelector('#' + containerId + ' svg');
+    if (!svgEl) { return; }
+    var clone = svgEl.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var source = '<?xml version="1.0" encoding="UTF-8"?>\n' + clone.outerHTML;
+    var blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  document.querySelectorAll('.dl-svg').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      downloadSVG(btn.dataset.svg, 'flavorforge-' + btn.dataset.svg + '.svg');
+    });
+  });
+  document.getElementById('download-card-svg').addEventListener('click', function () {
+    downloadSVG('rc-phase', 'flavorforge-recipe-phase.svg');
+  });
+
+  // ---- JSON actions ------------------------------------------------------
+  document.getElementById('refresh-json').addEventListener('click', function () {
+    document.getElementById('json-area').value = F.exportRecipe(recipe);
+  });
+  document.getElementById('copy-json').addEventListener('click', function () {
+    var area = document.getElementById('json-area');
+    var text = F.exportRecipe(recipe);
+    area.value = text;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashStatus('Copied recipe JSON to clipboard.', true);
+      }, function () { selectAndFallback(area); });
+    } else { selectAndFallback(area); }
+  });
+  function selectAndFallback(area) {
+    area.focus(); area.select();
+    flashStatus('Select and copy the highlighted JSON.', true);
+  }
+  document.getElementById('download-json').addEventListener('click', function () {
+    var text = F.exportRecipe(recipe);
+    var blob = new Blob([text], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'flavorforge-recipe.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
+  document.getElementById('import-json').addEventListener('click', function () {
+    var area = document.getElementById('import-area');
+    var text = (area.value.trim() || document.getElementById('json-area').value);
+    try {
+      var parsed = F.importRecipe(text);
+      recipe = parsed;
+      syncControls();
+      document.getElementById('json-area').value = F.exportRecipe(recipe);
+      area.value = '';
+      render();
+      flashStatus('Imported "' + parsed.name + '" successfully.', true);
+    } catch (e) {
+      flashStatus('Import failed: ' + e.message, false);
+    }
+  });
+  document.getElementById('load-example').addEventListener('click', function () {
+    var ex = F.createRecipe({
+      name: 'Black Sesame Boba Brioche',
+      style: 'boba', flourGrams: 500, hydrationPct: 62, saltPct: 1.8,
+      starterPct: 25, targetYieldPct: 20.5, grindMicrons: 520, brewTempC: 92,
+      notes: 'Cook tapioca pearls until the core turns translucent. Watch the gelatinization midpoint.'
+    });
+    document.getElementById('import-area').value = F.exportRecipe(ex);
+    flashStatus('Example loaded into the import box. Click Import JSON to apply it.', true);
+  });
+  function flashStatus(msg, ok) {
+    var el = document.getElementById('import-status');
+    el.textContent = msg;
+    el.className = 'import-status ' + (ok ? 'ok' : 'bad');
+  }
+  document.getElementById('schema-block').textContent = [
+    '{',
+    '  "schema": "flavorforge/recipe",',
+    '  "version": 1,',
+    '  "name": "string",',
+    '  "style": "sourdough | boba | espresso | hybrid",',
+    '  "flourGrams": 1000,',
+    '  "hydrationPct": 70,',
+    '  "saltPct": 2,',
+    '  "starterPct": 20,',
+    '  "targetYieldPct": 20,',
+    '  "grindMicrons": 600,',
+    '  "brewTempC": 93,',
+    '  "notes": "string"',
+    '}'
+  ].join('\n');
+
+  // ---- first paint -------------------------------------------------------
+  syncControls();
+  render();
+})();
+</script>
+</body>
+</html>
