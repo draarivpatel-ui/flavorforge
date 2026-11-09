@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "FlavorForge"
+abstract: >-
+  A zero-dependency offline culinary chemistry and reaction kinetics
+  notebook. Models Maillard crust browning, starch gelatinization, dough
+  fermentation, and espresso extraction from physical rate laws.
+type: software
+license: MIT
+repository-code: "https://github.com/draarivpatel-ui/flavorforge"
+url: "https://draarivpatel-ui.github.io/flavorforge/"
+keywords:
+  - culinary-chemistry
+  - reaction-kinetics
+  - arrhenius
+  - food-science
+  - notebook
+  - javascript
+  - zero-dependency
+authors:
+  - family-names: "Patel"
+    given-names: "Aariv"
+    alias: "draarivpatel-ui"
+preferred-citation:
+  type: software
+  title: "FlavorForge"
+  version: "1.0.0"
+  date-released: "2026-11-08"
+  license: MIT
+  url: "https://draarivpatel-ui.github.io/flavorforge/"
+  authors:
+    - family-names: "Patel"
+      given-names: "Aariv"
+      alias: "draarivpatel-ui"
