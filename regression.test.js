@@ -1,0 +1,200 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const F = require('./kinetics.js');
+const close = (actual, expected, tolerance = 1e-10) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} differs from ${expected}`);
+
+test('all rate inputs and gas constants require finite numbers', () => {
+  for (const bad of [NaN, Infinity, -Infinity, '300', null]) {
+    assert.throws(() => F.arrheniusRate(1, 1, 300, bad));
+    assert.throws(() => F.rateRatio(1000, 300, bad));
+    assert.throws(() => F.activationEnergyFromRates(1, 300, bad, 400));
+    assert.throws(() => F.browningFraction(1, bad));
+  }
+  assert.throws(() => F.arrheniusRate(-1, 1, 300), RangeError);
+  assert.throws(() => F.arrheniusRate(1, -1, 300), RangeError);
+});
+
+test('zero activation energy and equal temperatures avoid underflow-induced NaN', () => {
+  assert.equal(F.arrheniusRate(5, 0, Number.MIN_VALUE, Number.MIN_VALUE), 5);
+  assert.equal(F.rateRatio(1e300, 300, 300, Number.MIN_VALUE), 1);
+});
+
+test('temperature conversions reject absolute-zero violations and string coercion', () => {
+  close(F.celsiusToKelvin(-273.15), 0);
+  close(F.kelvinToCelsius(0), -273.15);
+  assert.throws(() => F.celsiusToKelvin(-273.16), RangeError);
+  assert.throws(() => F.kelvinToCelsius(-1), RangeError);
+  assert.throws(() => F.celsiusToKelvin('20'), TypeError);
+});
+
+test('first-order conversion preserves very small nonzero progress', () => {
+  close(F.browningFraction(1e-16, 1) / 1e-16, 1, 1e-15);
+  close(F.timeToFraction(0.3, 1e-16) / (1e-16 / 0.3), 1, 1e-15);
+  assert.equal(F.browningFraction(0, 100), 0);
+  assert.equal(F.browningFraction(1e300, 1e300), 1);
+});
+
+test('default Maillard teaching calibration gives a 20 minute half-life at 150 C', () => {
+  close(F.halfLife(F.maillardRate(150)), 20, 1e-10);
+  close(F.browningFraction(F.maillardRate(150), 20), 0.5);
+});
+
+test('relative Arrhenius rates remain defined when individual rates underflow', () => {
+  assert.equal(F.maillardRate(0, { A: 1, Ea: 1e7 }), 0);
+  assert.equal(F.relativeBrowning(150, { A: 1, Ea: 1e7, refC: 150 }), 1);
+  assert.throws(() => F.rateRatio(1e9, 1, 1000), RangeError);
+});
+
+test('activation-energy recovery uses log differences for extreme rate ratios', () => {
+  const actual = F.activationEnergyFromRates(1e-250, 300, 1e250, 400);
+  const expected = F.R * (500 * Math.LN10) / (1 / 300 - 1 / 400);
+  close(actual / expected, 1, 1e-12);
+});
+
+test('model options merge documented defaults without mutating them', () => {
+  const before = JSON.stringify(F.constants);
+  assert.ok(Number.isFinite(F.maillardRate(180, { Ea: 90000 })));
+  assert.ok(Number.isFinite(F.doublingTime(28, { refDoublingMin: 90 })));
+  close(F.doublingTime(28, { refDoublingMin: 90 }), 90);
+  assert.equal(JSON.stringify(F.constants), before);
+  assert.throws(() => F.maillardRate(180, 'bad'), TypeError);
+});
+
+test('curve samplers reject zero, one, fractional, and excessive point counts', () => {
+  const samplers = [n => F.browningCurve(100, 200, n), n => F.gelatinizationCurve(F.STARCH_PROFILES.rice, 60, 40, 100, n), n => F.fermentationCurve(28, 240, n), n => F.extractionCurve(180, 1400, n)];
+  for (const sampler of samplers) for (const count of [0, 1, 2.5, NaN, 10001]) assert.throws(() => sampler(count), RangeError);
+  assert.throws(() => F.browningCurve(200, 100, 10), RangeError);
+});
+
+test('all curve samplers include exact finite endpoints', () => {
+  const curves = [F.browningCurve(100, 240, 17), F.gelatinizationCurve(F.STARCH_PROFILES.rice, 70, 40, 100, 17), F.fermentationCurve(28, 240, 17), F.extractionCurve(180, 1400, 17)];
+  const keys = ['tempC', 'tempC', 'timeMin', 'grindMicrons'];
+  curves.forEach((curve, index) => { assert.equal(curve.length, 17); assert.ok(curve.every(point => Object.values(point).every(Number.isFinite))); });
+  assert.deepEqual(curves.map((curve, index) => [curve[0][keys[index]], curve.at(-1)[keys[index]]]), [[100, 240], [40, 100], [0, 240], [180, 1400]]);
+});
+
+test('recipe scaling rejects reserved keys and invalid ingredient maps', () => {
+  for (const percentages of [null, [], { flour: 100 }, JSON.parse('{"__proto__":20}'), { constructor: 1 }, { water: NaN }, { water: Infinity }]) {
+    assert.throws(() => F.scaleRecipe(1000, percentages));
+    assert.throws(() => F.totalYieldPercent(percentages));
+  }
+  assert.throws(() => F.hydration(-1, 1000), RangeError);
+  assert.throws(() => F.weightFromPercentage(20, Infinity), TypeError);
+});
+
+test('scaled mass equals the sum of ingredients across deterministic formulas', () => {
+  for (const flour of [1, 237.5, 1000, 10000]) for (const water of [0, 62.5, 100]) {
+    const result = F.scaleRecipe(flour, { water, salt: 2, starter: 20 });
+    close(Object.values(result.weights).reduce((sum, value) => sum + value, 0), result.totalWeight, 1e-8);
+  }
+});
+
+test('starter analysis includes starter flour and water in effective hydration', () => {
+  const result = F.analyzeDoughRecipe(F.createRecipe());
+  assert.equal(result.starterFlour, 100); assert.equal(result.starterWater, 100);
+  assert.equal(result.totalFlour, 1100); assert.equal(result.totalWater, 800);
+  close(result.effectiveHydrationPct, 800 / 1100 * 100);
+  close(result.prefermentedFlourPct, 100 / 1100 * 100);
+  assert.equal(result.totalWeight, result.totalFlour + result.totalWater + result.weights.salt);
+});
+
+test('dry and liquid starters conserve mass and no-starter hydration matches added water', () => {
+  for (const starterHydrationPct of [0, 50, 100, 200]) {
+    const result = F.analyzeDoughRecipe(F.createRecipe({ starterHydrationPct }));
+    close(result.starterFlour + result.starterWater, result.weights.starter);
+    close(result.starterWater / result.starterFlour * 100, starterHydrationPct);
+  }
+  close(F.analyzeDoughRecipe(F.createRecipe({ starterPct: 0, hydrationPct: 62.5 })).effectiveHydrationPct, 62.5);
+});
+
+test('recipe schema enforces every numeric range and supported style', () => {
+  for (const [field, [min, max]] of Object.entries(F.RECIPE_LIMITS)) {
+    assert.doesNotThrow(() => F.createRecipe({ [field]: min }));
+    assert.doesNotThrow(() => F.createRecipe({ [field]: max }));
+    assert.throws(() => F.createRecipe({ [field]: min - 0.1 }));
+    assert.throws(() => F.createRecipe({ [field]: max + 0.1 }));
+  }
+  assert.throws(() => F.createRecipe({ style: 'unknown' }), TypeError);
+  assert.throws(() => F.createRecipe({ name: ' ' }), RangeError);
+  assert.throws(() => F.createRecipe({ name: 'House\nloaf' }), RangeError);
+});
+
+test('legacy version 1 recipe cards default to a 100% hydration starter', () => {
+  const legacy = F.createRecipe(); delete legacy.starterHydrationPct;
+  const restored = F.importRecipe(JSON.stringify(legacy));
+  assert.equal(restored.starterHydrationPct, 100);
+  assert.equal(F.exportRecipe(restored), F.exportRecipe(F.createRecipe()));
+});
+
+test('recipe exports preserve Unicode notes, canonical key order, and text limits', () => {
+  const recipe = F.createRecipe({ name: 'Café boba', notes: 'Temperature: 93 °C. 水' });
+  assert.deepEqual(F.importRecipe(F.exportRecipe(recipe)), recipe);
+  assert.equal(F.exportRecipe(F.importRecipe(F.exportRecipe(recipe))), F.exportRecipe(recipe));
+  assert.throws(() => F.createRecipe({ notes: 'x'.repeat(4001) }), RangeError);
+  assert.throws(() => F.importRecipe(' '.repeat(65537)), RangeError);
+});
+
+test('fermentation volume starts at one and doubles at its calibrated time', () => {
+  for (const temperature of [4, 20, 28, 38, 60]) {
+    const dt = F.doublingTime(temperature);
+    close(F.doughVolume(0, temperature), 1);
+    close(F.doughVolume(dt, temperature), 2);
+    close(F.doughVolume(dt * 2, temperature), 3);
+    assert.ok(F.doughVolume(dt * 20, temperature) <= 4);
+  }
+  assert.throws(() => F.doughRise(-1, 28), RangeError);
+  assert.throws(() => F.fermentationRate(28, { killWidth: 0 }), RangeError);
+});
+
+test('relative fermentation uses logarithms when absolute rates underflow', () => {
+  assert.equal(F.fermentationRate(28, { Ea: 1e7 }), 0);
+  assert.equal(F.fermentationRelative(28, { Ea: 1e7 }), 1);
+  close(F.fermentationRelative(38), F.fermentationRate(38) / F.fermentationRate(28), 1e-12);
+});
+
+test('espresso options require ordered yields, positive scale, exponent, and grind bounds', () => {
+  for (const opts of [{ Emin: 25 }, { Emax: 101 }, { g0: 0 }, { p: -1 }, { gmin: 1500 }, { gmax: NaN }]) assert.throws(() => F.solveGrindForYield(20, opts));
+  for (const yieldPct of [NaN, Infinity, -1, 101]) assert.throws(() => F.extractionWindow(yieldPct));
+});
+
+test('espresso solver reaches both domain endpoints without clamping', () => {
+  const o = F.constants.ESPRESSO_DEFAULT;
+  close(F.solveGrindForYield(F.extractionYield(o.gmin)), o.gmin, 1e-8);
+  close(F.solveGrindForYield(F.extractionYield(o.gmax)), o.gmax, 1e-8);
+});
+
+test('browning schedules match a constant-temperature closed form', () => {
+  const result = F.browningSchedule([{ tempC: 150, durationMin: 30 }]);
+  close(result.fraction, F.browningFraction(F.maillardRate(150), 30));
+  close(result.timeTo50Min, 20, 1e-9);
+  assert.equal(result.totalMin, 30);
+});
+
+test('schedule integration is invariant under splitting an equal-temperature stage', () => {
+  const whole = F.browningSchedule([{ tempC: 180, durationMin: 10 }]);
+  const split = F.browningSchedule([{ tempC: 180, durationMin: 4 }, { tempC: 180, durationMin: 6 }]);
+  close(whole.totalDose, split.totalDose); close(whole.fraction, split.fraction);
+  close(whole.timeTo50Min, split.timeTo50Min);
+});
+
+test('piecewise schedules locate the 50% crossing inside the correct stage', () => {
+  const result = F.browningSchedule([{ tempC: 150, durationMin: 5 }, { tempC: 150, durationMin: 20 }]);
+  close(result.timeTo50Min, 20, 1e-9);
+  assert.ok(result.stages[0].fraction < 0.5 && result.stages[1].fraction > 0.5);
+  assert.equal(F.browningSchedule([{ tempC: 100, durationMin: 1 }]).timeTo50Min, null);
+});
+
+test('schedules reject malformed, excessive, and non-finite stages', () => {
+  for (const stages of [[], Array(1), [{ tempC: 150, durationMin: 0 }], [{ tempC: 301, durationMin: 1 }], [{ tempC: NaN, durationMin: 10 }], [{ tempC: 150, durationMin: 1441 }], Array.from({ length: 33 }, () => ({ tempC: 150, durationMin: 1 }))]) assert.throws(() => F.browningSchedule(stages));
+});
+
+test('both documented schedule presets are deterministic and independently computed', () => {
+  assert.deepEqual(F.BROWNING_PRESETS.map(preset => preset.name), ['Steady surface', 'Warm then hot']);
+  for (const preset of F.BROWNING_PRESETS) {
+    const result = F.browningSchedule(preset.stages);
+    const dose = preset.stages.reduce((sum, stage) => sum + F.maillardRate(stage.tempC) * stage.durationMin, 0);
+    close(result.fraction, -Math.expm1(-dose));
+    assert.deepEqual(result, F.browningSchedule(preset.stages));
+  }
+});

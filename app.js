@@ -16,6 +16,9 @@
     EaKj: 100,
     starchProfile: 'tapioca'
   };
+  var invalidFields = new Set();
+  var scheduleStages = F.BROWNING_PRESETS[0].stages.map(function (stage) { return Object.assign({}, stage); });
+  var scheduleValid = true;
 
   // ---- small helpers -----------------------------------------------------
   function cssVar(name) {
@@ -393,9 +396,7 @@
     var ewin = F.extractionWindow(yieldPct);
     var solved = null;
     try { solved = F.solveGrindForYield(recipe.targetYieldPct); } catch (e) { solved = null; }
-    var scaled = F.scaleRecipe(recipe.flourGrams, {
-      water: recipe.hydrationPct, salt: recipe.saltPct, starter: recipe.starterPct
-    });
+    var scaled = F.analyzeDoughRecipe(recipe);
     return {
       maillard: maillard, rel: rel, k: k, onset: onset, q10v: F.q10(maillard.Ea, view.surfaceTempC),
       halfLife: F.halfLife(k), p: p, tm: tm, t90: t90, doubling: doubling,
@@ -443,6 +444,12 @@
     tile('yieldWindow', d.ewin.label);
     tile('yieldNote', d.ewin.note);
     tile('solvedGrind', d.solved === null ? 'outside domain' : fmt(d.solved, 0) + ' um');
+    tile('effectiveHydration', fmt(d.scaled.effectiveHydrationPct, 2) + '%');
+    tile('prefermentedFlour', fmt(d.scaled.prefermentedFlourPct, 2) + '%');
+    document.getElementById('apply-grind').disabled = d.solved === null || invalidFields.size > 0;
+    document.getElementById('solver-status').textContent = d.solved === null
+      ? 'Reachable yield: ' + fmt(F.extractionYield(C.ESPRESSO_DEFAULT.gmax), 2) + ' to ' + fmt(F.extractionYield(C.ESPRESSO_DEFAULT.gmin), 2) + '%. Adjust the target.'
+      : 'Solved yield: ' + fmt(F.extractionYield(d.solved), 3) + '%. Slider uses the nearest whole micron.';
 
     // ----- chart: browning
     var btemps = [], brels = [];
@@ -464,9 +471,9 @@
 
     // ----- chart: gelatinization
     var gtemp = [], gelSeries = [];
-    var profKeys = ['tapioca', 'wheat', 'potato'];
-    var profColors = [s1, s2, s3];
-    var profDashes = ['', '6 3', '2 3'];
+    var profKeys = ['tapioca', 'wheat', 'potato', 'rice'];
+    var profColors = [s1, s2, s3, cssVar('--s4')];
+    var profDashes = ['', '6 3', '2 3', '8 3 2 3'];
     for (var gt = 40; gt <= 100; gt += 1) { gtemp.push(gt); }
     profKeys.forEach(function (key, idx) {
       var prof = F.STARCH_PROFILES[key];
@@ -479,7 +486,7 @@
     setChart('chart-gel', {
       id: 'chart-gel', xValues: gtemp, xMin: 40, xMax: 100, yMin: 0, yMax: 1,
       xLabel: 'Core temperature (deg C)', yLabel: 'Gelatinized fraction alpha (0 to 1)',
-      ariaLabel: 'Degree of starch gelatinization versus temperature for tapioca, wheat, and potato starch',
+      ariaLabel: 'Degree of starch gelatinization versus temperature for tapioca, wheat, potato, and rice starch',
       series: gelSeries,
       markers: [{ x: d.tm, y: 0.5, color: cssVar('--ink'), label: 'Tm ' + fmt(d.tm, 1) + ' C' }],
       tableSample: 6
@@ -488,14 +495,14 @@
     // ----- chart: dough rise
     var rtimes = [], rvals = [];
     var rMax = Math.max(240, d.doubling * 4);
-    for (var rt = 0; rt <= rMax; rt += rMax / 80) { rtimes.push(rt); rvals.push(F.doughRise(rt, view.fermentTempC)); }
+    for (var ri = 0; ri <= 80; ri++) { var rt = rMax * ri / 80; rtimes.push(rt); rvals.push(F.doughVolume(rt, view.fermentTempC)); }
     setChart('chart-rise', {
-      id: 'chart-rise', xValues: rtimes, xMin: 0, xMax: rMax, yMin: 0, yMax: 1,
-      xLabel: 'Proofing time (minutes)', yLabel: 'Normalized dough expansion V(t)',
+      id: 'chart-rise', xValues: rtimes, xMin: 0, xMax: rMax, yMin: 1, yMax: 4,
+      xLabel: 'Proofing time (minutes)', yLabel: 'Volume relative to initial dough',
       ariaLabel: 'Relative dough volume rise versus time at the chosen fermentation temperature',
-      series: [{ name: 'Dough volume fraction', color: s2, values: rvals }],
-      markers: [{ x: d.doubling, y: F.doughRise(d.doubling, view.fermentTempC), color: s1, label: 't_double ' + (d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'), dir: 'right' }],
-      endLabels: [{ index: 0, text: 'asymptote' }],
+      series: [{ name: 'Relative dough volume', color: s2, values: rvals }],
+      markers: [{ x: d.doubling, y: 2, color: s1, label: '2x at ' + (d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'), dir: 'right' }],
+      endLabels: [{ index: 0, text: 'toward 4x' }],
       tableSample: 8
     });
 
@@ -521,6 +528,7 @@
 
     // ----- recipe card
     renderRecipeCard(d);
+    renderSchedule(d.maillard);
 
     // ----- JSON
     var jsonArea = document.getElementById('json-area');
@@ -551,6 +559,9 @@
 
     var targets = [
       ['Hydration ratio', fmt(recipe.hydrationPct, 1) + ' %'],
+      ['Hydration including starter', fmt(d.scaled.effectiveHydrationPct, 2) + ' %'],
+      ['Starter flour / water', fmt(d.scaled.starterFlour, 1) + ' g / ' + fmt(d.scaled.starterWater, 1) + ' g'],
+      ['Flour already fermented', fmt(d.scaled.prefermentedFlourPct, 2) + ' %'],
       ['Gelatinization midpoint Tm', fmt(d.tm, 1) + ' deg C (' + d.p.label.split(' / ')[0] + ')'],
       ['Proofing temperature', fmt(view.fermentTempC, 0) + ' deg C'],
       ['Predicted doubling time', d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'],
@@ -579,30 +590,51 @@
     var scope = el.dataset.target === 'view' ? view : recipe;
     var val;
     if (el.type === 'number' || el.type === 'range') {
-      val = parseFloat(el.value);
-      if (isNaN(val)) { return; }
+      val = Number(el.value);
     } else {
       val = el.value;
     }
-    scope[el.dataset.field] = val;
-    var out = el.parentElement ? el.parentElement.querySelector('output.readout') : null;
-    if (out && (el.type === 'range' || el.type === 'number')) {
-      if (el.dataset.suffix !== undefined) { out.textContent = readout(val, el.dataset); }
+    try {
+      if (el.type === 'number' || el.type === 'range') {
+        if (!el.value.trim() || !Number.isFinite(val)) throw new RangeError('Enter a finite number');
+        if (el.min !== '' && val < Number(el.min)) throw new RangeError('Minimum is ' + el.min);
+        if (el.max !== '' && val > Number(el.max)) throw new RangeError('Maximum is ' + el.max);
+      }
+      if (scope === recipe) {
+        var candidate = Object.assign({}, recipe);
+        candidate[el.dataset.field] = val;
+        recipe = F.validateRecipe(candidate);
+      } else {
+        if (el.dataset.field === 'starchProfile' && !Object.prototype.hasOwnProperty.call(F.STARCH_PROFILES, val)) throw new RangeError('Choose a starch profile');
+        scope[el.dataset.field] = val;
+      }
+      invalidFields.delete(el.id);
+      el.setAttribute('aria-invalid', 'false');
+      syncControls(el);
+      document.getElementById('control-status').textContent = invalidFields.size ? 'Correct the marked fields. The notebook keeps the last valid values.' : '';
+    } catch (error) {
+      invalidFields.add(el.id);
+      el.setAttribute('aria-invalid', 'true');
+      document.getElementById('control-status').textContent = 'Invalid input: ' + error.message + '. The notebook keeps the last valid values.';
     }
+    ['download-json', 'print-card', 'download-card-svg'].forEach(function (id) { document.getElementById(id).disabled = invalidFields.size > 0; });
     scheduleRender();
   }
 
   document.querySelectorAll('[data-field]').forEach(function (el) {
+    var limits = el.dataset.target === 'recipe' ? F.RECIPE_LIMITS[el.dataset.field] : null;
+    if (limits) { el.setAttribute('min', limits[0]); el.setAttribute('max', limits[1]); }
     el.addEventListener('input', function () { applyField(el); });
     el.addEventListener('change', function () { applyField(el); });
   });
 
-  function syncControls() {
+  function syncControls(source) {
     document.querySelectorAll('[data-field]').forEach(function (el) {
+      if (invalidFields.has(el.id)) return;
       var scope = el.dataset.target === 'view' ? view : recipe;
       var val = scope[el.dataset.field];
       if (val === undefined) { return; }
-      el.value = val;
+      if (el !== source) el.value = val;
       var out = el.parentElement ? el.parentElement.querySelector('output.readout') : null;
       if (out && el.dataset.suffix !== undefined) { out.textContent = readout(val, el.dataset); }
     });
@@ -610,18 +642,30 @@
 
   // ---- tabs --------------------------------------------------------------
   document.querySelectorAll('.tab').forEach(function (btn) {
+    btn.setAttribute('tabindex', btn.getAttribute('aria-selected') === 'true' ? '0' : '-1');
     btn.addEventListener('click', function () {
       var name = btn.dataset.tab;
       document.querySelectorAll('.tab').forEach(function (b) {
         var on = b === btn;
         b.classList.toggle('active', on);
         b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.setAttribute('tabindex', on ? '0' : '-1');
       });
       document.querySelectorAll('.tab-panel').forEach(function (p) {
         var on = p.id === 'tab-' + name;
         p.classList.toggle('active', on);
         p.hidden = !on;
       });
+    });
+    btn.addEventListener('keydown', function (event) {
+      var tabs = Array.from(document.querySelectorAll('.tab'));
+      var index = tabs.indexOf(btn), next = index;
+      if (event.code === 'ArrowRight') next = (index + 1) % tabs.length;
+      else if (event.code === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.code === 'Home') next = 0;
+      else if (event.code === 'End') next = tabs.length - 1;
+      else return;
+      event.preventDefault(); tabs[next].click(); tabs[next].focus();
     });
   });
 
@@ -640,6 +684,7 @@
   // ---- theme -------------------------------------------------------------
   var themeBtn = document.getElementById('theme-toggle');
   function setTheme(mode) {
+    if (mode !== 'light' && mode !== 'dark') mode = 'light';
     document.documentElement.setAttribute('data-theme', mode);
     var dark = mode === 'dark';
     themeBtn.textContent = dark ? 'Parchment notebook' : 'Espresso slate';
@@ -674,6 +719,10 @@
     if (!svgEl) { return; }
     var clone = svgEl.cloneNode(true);
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    style.textContent = '.ff-tick,.ff-mark-label,.ff-end-label{fill:' + cssVar('--ink') + ';font:12px monospace}' +
+      '.ff-axis-title,.ff-region-label,.ff-phase-title{fill:' + cssVar('--ink-2') + ';font:13px Georgia,serif}';
+    clone.appendChild(style);
     var source = '<?xml version="1.0" encoding="UTF-8"?>\n' + clone.outerHTML;
     var blob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
     var url = URL.createObjectURL(blob);
@@ -724,6 +773,10 @@
     try {
       var parsed = F.importRecipe(text);
       recipe = parsed;
+      invalidFields.clear();
+      document.querySelectorAll('[data-field]').forEach(function (el) { el.setAttribute('aria-invalid', 'false'); });
+      ['download-json', 'print-card', 'download-card-svg'].forEach(function (id) { document.getElementById(id).disabled = false; });
+      document.getElementById('control-status').textContent = '';
       syncControls();
       document.getElementById('json-area').value = F.exportRecipe(recipe);
       area.value = '';
@@ -735,10 +788,10 @@
   });
   document.getElementById('load-example').addEventListener('click', function () {
     var ex = F.createRecipe({
-      name: 'Black Sesame Boba and Brown Sugar Pearl Protocol',
-      style: 'boba', flourGrams: 500, hydrationPct: 62, saltPct: 1.8,
-      starterPct: 25, targetYieldPct: 20.5, grindMicrons: 520, brewTempC: 92,
-      notes: 'Simmer tapioca pearls until the core passes the 62.3 deg C gelatinization midpoint and turns translucent.'
+      name: 'Tapioca boba dough',
+      style: 'boba', flourGrams: 500, hydrationPct: 62, saltPct: 0,
+      starterPct: 0, targetYieldPct: 20.5, grindMicrons: 520, brewTempC: 92,
+      notes: 'The illustrative tapioca model has a 62.3 C midpoint at 62% hydration. Record actual observations separately.'
     });
     document.getElementById('import-area').value = F.exportRecipe(ex);
     flashStatus('Sample formula loaded into the import buffer. Click Import JSON to apply.', true);
@@ -758,12 +811,51 @@
     '  "hydrationPct": 70,',
     '  "saltPct": 2,',
     '  "starterPct": 20,',
+    '  "starterHydrationPct": 100,',
     '  "targetYieldPct": 20,',
     '  "grindMicrons": 600,',
     '  "brewTempC": 93,',
     '  "notes": "string"',
     '}'
   ].join('\n');
+
+  function renderSchedule(options) {
+    if (!scheduleValid) return;
+    var result = F.browningSchedule(scheduleStages, options);
+    document.getElementById('schedule-summary').textContent = fmt(result.totalMin, 1) + ' min; ' + fmt(result.fraction * 100, 2) + '% model conversion. ' +
+      (result.timeTo50Min === null ? '50% is not reached.' : '50% reached at ' + fmt(result.timeTo50Min, 2) + ' min.');
+    document.getElementById('schedule-table').innerHTML = buildTable([
+      { label: 'Surface (C)', key: 'tempC' }, { label: 'Stage (min)', key: 'durationMin' }, { label: 'End (min)', key: 'endMin' }, { label: 'Conversion (%)', key: 'conversion' }
+    ], result.stages.map(function (stage) { return Object.assign({}, stage, { conversion: fmt(stage.fraction * 100, 2) }); }));
+  }
+
+  F.BROWNING_PRESETS.forEach(function (preset, index) {
+    var option = document.createElement('option'); option.value = index; option.textContent = preset.name;
+    document.getElementById('schedule-preset').appendChild(option);
+  });
+  document.getElementById('schedule-json').value = JSON.stringify(scheduleStages, null, 2);
+  document.getElementById('load-schedule').addEventListener('click', function () {
+    var preset = F.BROWNING_PRESETS[Number(document.getElementById('schedule-preset').value)];
+    if (!preset) return;
+    scheduleStages = preset.stages.map(function (stage) { return Object.assign({}, stage); });
+    scheduleValid = true;
+    document.getElementById('schedule-json').value = JSON.stringify(scheduleStages, null, 2);
+    renderSchedule(computeDerived().maillard);
+  });
+  document.getElementById('analyze-schedule').addEventListener('click', function () {
+    try {
+      var text = document.getElementById('schedule-json').value;
+      if (text.length > 65536) throw new RangeError('Schedule JSON exceeds 64 KiB');
+      var stages = JSON.parse(text);
+      F.browningSchedule(stages, computeDerived().maillard);
+      scheduleStages = stages; scheduleValid = true;
+      renderSchedule(computeDerived().maillard);
+    } catch (error) {
+      scheduleValid = false;
+      document.getElementById('schedule-summary').textContent = 'Schedule rejected: ' + error.message;
+      document.getElementById('schedule-table').innerHTML = '';
+    }
+  });
 
   // ---- first paint -------------------------------------------------------
   syncControls();

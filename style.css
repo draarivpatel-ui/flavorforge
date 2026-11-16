@@ -27,6 +27,7 @@
   --s1: #b84a24; /* terracotta */
   --s2: #3a6b52; /* botanical sage */
   --s3: #28598a; /* Prussian blue */
+  --s4: #8a6500;
   --s1-soft: rgba(184, 74, 36, 0.11);
   --s3-soft: rgba(58, 107, 82, 0.12);
 
@@ -64,6 +65,7 @@
   --s1: #e06d44;
   --s2: #5aa37e;
   --s3: #5b9bd5;
+  --s4: #d2b64d;
   --s1-soft: rgba(224, 109, 68, 0.15);
   --s3-soft: rgba(90, 163, 126, 0.16);
 
@@ -76,6 +78,12 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+[aria-invalid="true"] { border-color: var(--bad); }
+.control-status { max-width: 1112px; margin: 8px auto; padding: 0 16px; color: var(--bad); }
+#schedule-preset { max-width: 280px; }
+#schedule-json { margin: 8px 0; font-family: var(--font-mono); }
 
 html, body {
   margin: 0;
@@ -478,12 +486,6 @@ textarea { resize: vertical; }
   padding-bottom: 14px;
   flex-wrap: wrap;
 }
-.rc-kicker {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 0.85rem;
-  color: var(--ink-2);
-}
 .rc-head h2 { font-size: 1.7rem; margin: 4px 0; }
 .rc-style { color: var(--accent); font-weight: 600; font-size: 0.9rem; font-family: var(--font-mono); }
 .rc-id { text-align: right; font-size: 0.76rem; color: var(--muted); font-family: var(--font-mono); }
@@ -538,7 +540,7 @@ textarea { resize: vertical; }
 }
 
 /* ---- Phase Diagrams ---- */
-.phase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 18px; }
+.phase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 18px; }
 .phase-figure { margin: 0; }
 .phase-figure figcaption h3 { font-size: 1.08rem; }
 .phase-figure figcaption p { color: var(--ink-2); font-size: 0.83rem; margin: 4px 0 12px; }
@@ -595,7 +597,12 @@ textarea { resize: vertical; }
 
 /* ---- Print Styles ---- */
 @media print {
-  :root { color-scheme: light; }
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --surface: #ffffff; --surface-2: #f4f4f4; --raised: #ffffff;
+    --ink: #111111; --ink-2: #333333; --muted: #444444;
+    --border: #999999; --grid: #dddddd; --rule-heavy: #222222;
+  }
   body { background: #ffffff; color: #111111; }
   .no-print, .site-header, .tabs, .site-footer, .section-head, .card-toolbar,
   .chart-head .table-toggle, .ff-tooltip { display: none !important; }
@@ -610,4 +617,5 @@ textarea { resize: vertical; }
   a { color: #111111; text-decoration: none; }
   .ff-tick, .ff-region-label, .ff-phase-title, .ff-axis-title,
   .ff-mark-label, .ff-end-label { fill: #222222 !important; }
+  .ff-chart > rect:first-child, .ff-phase > rect:first-child { fill: #ffffff !important; }
 }

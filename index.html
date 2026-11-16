@@ -25,7 +25,7 @@
       </div>
       <div class="brand-text">
         <h1>FlavorForge</h1>
-        <p class="tagline">A culinary reaction kinetics, starch gelatinization, and extraction notebook</p>
+        <p class="tagline">Cooking models, recipe math, and printable notes</p>
       </div>
     </div>
     <div class="header-actions">
@@ -41,6 +41,7 @@
     <span class="strip-note">Measure the rate constant, log the hydration, print the bench sheet.</span>
   </div>
 </header>
+<p id="control-status" class="control-status" role="status" aria-live="polite"></p>
 
 <nav class="tabs" role="tablist" aria-label="Laboratory notebook sections">
   <button role="tab" id="tabbtn-lab" aria-controls="tab-lab" aria-selected="true" class="tab active" data-tab="lab">1. Maillard Kinetics</button>
@@ -57,7 +58,7 @@
   <section id="tab-lab" class="tab-panel active" role="tabpanel" aria-labelledby="tabbtn-lab">
     <div class="section-head">
       <h2>Non-enzymatic Maillard browning (Arrhenius rate law)</h2>
-      <p>Crust and pearl caramelization follow thermally activated kinetics: <code>k(T) = A &middot; exp(-Ea / (R &middot; T))</code>. Adjust surface temperature, dough hydration, and apparent activation energy to inspect rate multipliers and reactant half-life.</p>
+      <p>Compare illustrative browning rates with <code>k(T) = A &middot; exp(-Ea / (R &middot; T))</code>. The default model is calibrated to a 20 minute half-life at 150 C. Maillard browning and sugar caramelization are different reactions.</p>
     </div>
 
     <div class="lab-grid">
@@ -71,9 +72,9 @@
           </div>
         </div>
         <div class="control">
-          <label for="range-hydration-lab">Formula hydration <span class="unit">(% of flour mass)</span></label>
+          <label for="range-hydration-lab">Added water <span class="unit">(% of base flour mass)</span></label>
           <div class="control-row">
-            <input id="range-hydration-lab" type="range" data-target="recipe" data-field="hydrationPct" data-suffix="%" min="0" max="100" step="1" value="70">
+            <input id="range-hydration-lab" type="range" data-target="recipe" data-field="hydrationPct" data-suffix="%" min="0" max="100" step="any" value="70">
             <output class="readout">70%</output>
           </div>
         </div>
@@ -122,6 +123,21 @@
       <div id="chart-lab" class="chart-slot"></div>
       <div id="table-lab" class="table-wrap" hidden></div>
     </div>
+
+    <section class="panel chart-panel" aria-labelledby="schedule-heading">
+      <h3 id="schedule-heading">Browning schedule analyzer</h3>
+      <p class="chart-sub">Compare staged surface temperatures. Conversion uses the exact sum of rate times duration for this first-order model. A schedule can contain 1 to 32 stages and last up to 1440 minutes.</p>
+      <label for="schedule-preset">Schedule preset</label>
+      <div class="data-actions">
+        <select id="schedule-preset"></select>
+        <button id="load-schedule" class="btn btn-ghost" type="button">Load preset</button>
+      </div>
+      <label for="schedule-json">Stages with tempC and durationMin</label>
+      <textarea id="schedule-json" rows="5" spellcheck="false"></textarea>
+      <button id="analyze-schedule" class="btn" type="button">Analyze schedule</button>
+      <p id="schedule-summary" class="import-status" role="status" aria-live="polite"></p>
+      <div id="schedule-table" class="table-wrap"></div>
+    </section>
   </section>
 
   <!-- ================= DOUGH & STARCH ================= -->
@@ -135,9 +151,9 @@
       <div class="panel controls">
         <h3>Crumb and fermentation parameters</h3>
         <div class="control">
-          <label for="range-hydration-dough">Hydration <span class="unit">(% of dry starch or flour)</span></label>
+          <label for="range-hydration-dough">Added water <span class="unit">(% of dry starch or base flour)</span></label>
           <div class="control-row">
-            <input id="range-hydration-dough" type="range" data-target="recipe" data-field="hydrationPct" data-suffix="%" min="0" max="100" step="1" value="70">
+            <input id="range-hydration-dough" type="range" data-target="recipe" data-field="hydrationPct" data-suffix="%" min="0" max="100" step="any" value="70">
             <output class="readout">70%</output>
           </div>
         </div>
@@ -187,7 +203,7 @@
       <div class="chart-head">
         <div>
           <h3>Botanical starch gelatinization sigmoids</h3>
-          <p class="chart-sub">Comparison of cassava tapioca, wheat, and potato starch swelling curves at current hydration, differentiated by stroke dash and color.</p>
+          <p class="chart-sub">Tapioca, wheat, potato, and rice starch curves at the added-water ratio, distinguished by dash and color.</p>
         </div>
         <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-gel">Show tabular data</button>
       </div>
@@ -200,7 +216,7 @@
       <div class="chart-head">
         <div>
           <h3>Logistic dough expansion over proofing time</h3>
-          <p class="chart-sub">Normalized volume fraction V(t) from 0 to 1 with inflection at 1.5 doubling times.</p>
+          <p class="chart-sub">Relative volume starts at 1, reaches 2 at the calibrated doubling time, and approaches 4. This teaching model does not predict a specific dough culture.</p>
         </div>
         <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-rise">Show tabular data</button>
       </div>
@@ -213,7 +229,7 @@
   <section id="tab-espresso" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-espresso" hidden>
     <div class="section-head">
       <h2>Espresso solubles extraction and bisection grind solver</h2>
-      <p>Finer burr settings increase specific surface area and hydraulic resistance along a decreasing Hill curve. Invert the model with 200-step binary bisection to compute the exact micron setting for any target extraction yield.</p>
+      <p>Explore a decreasing Hill curve and a bisection solver for reachable yield targets. This model uses particle size only. Brew temperature is stored in the recipe and does not change the curve.</p>
     </div>
 
     <div class="lab-grid">
@@ -222,14 +238,14 @@
         <div class="control">
           <label for="range-grind">Median burr particle size <span class="unit">(microns)</span></label>
           <div class="control-row">
-            <input id="range-grind" type="range" data-target="recipe" data-field="grindMicrons" data-suffix=" um" min="180" max="1400" step="10" value="600">
+            <input id="range-grind" type="range" data-target="recipe" data-field="grindMicrons" data-suffix=" um" min="180" max="1400" step="any" value="600">
             <output class="readout">600 um</output>
           </div>
         </div>
         <div class="control">
           <label for="range-target-yield">Target solubles yield <span class="unit">(%)</span></label>
           <div class="control-row">
-            <input id="range-target-yield" type="range" data-target="recipe" data-field="targetYieldPct" data-suffix="%" min="15" max="23" step="0.1" value="20">
+            <input id="range-target-yield" type="number" data-target="recipe" data-field="targetYieldPct" data-suffix="%" min="0" max="100" step="0.1" value="20">
             <output class="readout">20%</output>
           </div>
         </div>
@@ -244,6 +260,7 @@
           <span class="solve-label">Bisection-solved burr setting for target yield</span>
           <span class="solve-value" data-tile="solvedGrind">0 um</span>
           <button id="apply-grind" class="btn btn-sm" type="button">Apply solved grind to burr slider</button>
+          <p id="solver-status" class="chart-sub" role="status" aria-live="polite"></p>
         </div>
       </div>
 
@@ -254,7 +271,7 @@
           <span class="stat-delta" data-tile="yieldWindow">Balanced / ideal</span>
         </div>
         <div class="stat-tile">
-          <span class="stat-label">Sensory profile</span>
+          <span class="stat-label">Typical range description</span>
           <span class="stat-note wide" data-tile="yieldNote">Sweet, syrupy, balanced acidity.</span>
         </div>
         <div class="stat-tile">
@@ -292,7 +309,7 @@
     <div class="card-toolbar no-print">
       <div class="control">
         <label for="in-name">Formula title</label>
-        <input id="in-name" type="text" data-target="recipe" data-field="name" value="House Sourdough and Boba Lab Card">
+        <input id="in-name" type="text" data-target="recipe" data-field="name" maxlength="120" value="House sourdough">
       </div>
       <div class="control">
         <label for="in-style">Protocol classification</label>
@@ -305,7 +322,7 @@
       </div>
       <div class="control">
         <label for="in-flour">Flour / dry starch base <span class="unit">(g)</span></label>
-        <input id="in-flour" type="number" data-target="recipe" data-field="flourGrams" min="1" max="100000" step="1" value="1000">
+        <input id="in-flour" type="number" data-target="recipe" data-field="flourGrams" min="1" max="10000" step="1" value="1000">
       </div>
       <div class="control">
         <label for="in-salt">Salt <span class="unit">(% of base)</span></label>
@@ -315,9 +332,13 @@
         <label for="in-starter">Levain / starter <span class="unit">(% of base)</span></label>
         <input id="in-starter" type="number" data-target="recipe" data-field="starterPct" min="0" max="100" step="1" value="20">
       </div>
+      <div class="control">
+        <label for="in-starter-hydration">Starter hydration <span class="unit">(% water / starter flour)</span></label>
+        <input id="in-starter-hydration" type="number" data-target="recipe" data-field="starterHydrationPct" min="0" max="200" step="0.1" value="100">
+      </div>
       <div class="control wide-control">
         <label for="in-notes">Bench observations and process notes</label>
-        <textarea id="in-notes" data-target="recipe" data-field="notes" rows="2">Log observations here. Keep water at the target temperature.</textarea>
+        <textarea id="in-notes" data-target="recipe" data-field="notes" maxlength="4000" rows="2">Log observations here. Keep water at the target temperature.</textarea>
       </div>
       <div class="card-actions">
         <button id="print-card" class="btn" type="button">Print bench formula sheet</button>
@@ -325,11 +346,19 @@
       </div>
     </div>
 
+    <section class="panel chart-panel no-print" aria-labelledby="hydration-inspector-heading">
+      <h3 id="hydration-inspector-heading">Starter and hydration inspector</h3>
+      <p>Starter adds both flour and water. These values include the starter; thermal curves use the added-water ratio.</p>
+      <div class="stat-panel">
+        <div class="stat-tile"><span class="stat-label">Hydration including starter</span><strong class="stat-value" data-tile="effectiveHydration"></strong></div>
+        <div class="stat-tile"><span class="stat-label">Flour already fermented</span><strong class="stat-value" data-tile="prefermentedFlour"></strong></div>
+      </div>
+    </section>
+
     <div id="recipe-card" class="recipe-card">
       <div class="rc-head">
         <div>
-          <div class="rc-kicker">FlavorForge Culinary Laboratory Bench Sheet</div>
-          <h2 id="rc-name">House Sourdough and Boba Lab Card</h2>
+          <h2 id="rc-name">House sourdough</h2>
           <div class="rc-style" id="rc-style">Sourdough boule</div>
         </div>
         <div class="rc-id">
@@ -377,7 +406,7 @@
   <section id="tab-phase" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-phase" hidden>
     <div class="section-head">
       <h2>Printable culinary phase diagrams</h2>
-      <p>Two-dimensional regime maps plotting physical and chemical state boundaries across temperature, hydration, and particle size. Every zone is directly labeled in place for monochrome printing.</p>
+      <p>Illustrative regime maps compare temperature, added-water ratio, and particle size. The boundaries are teaching approximations, not measured phase transitions.</p>
     </div>
 
     <div class="phase-grid">
@@ -420,7 +449,7 @@
   <section id="tab-data" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-data" hidden>
     <div class="section-head">
       <h2>Portable recipe schema (JSON import and export)</h2>
-      <p>Formulas serialize to a deterministic, versioned JSON document. Import validates schema identity, version, data types, and non-negative numeric bounds before updating the notebook.</p>
+      <p>Recipe JSON preserves the formula and notes. Import validates the version, style, text lengths, and supported numeric ranges. Thermal view settings and browning schedules are separate from the recipe.</p>
     </div>
 
     <div class="data-grid">

@@ -139,13 +139,16 @@ test('fermentation has an interior optimum and slows near denaturation', () => {
   close(F.doublingTime(28, o), o.refDoublingMin, 1e-6, 'ref doubling at 28C');
 });
 
-test('doughRise is monotonic and logistic', () => {
+test('doughRise is normalized from zero and doughVolume doubles at the calibrated time', () => {
   const o = F.constants.FERMENT_DEFAULT;
   const dt = F.doublingTime(28, o);
   const r0 = F.doughRise(0, 28, o);
-  const r1 = F.doughRise(dt * 1.5, 28, o);
+  const r1 = F.doughRise(dt, 28, o);
   const r2 = F.doughRise(dt * 6, 28, o);
-  close(r1, 0.5, 1e-9, 'inflection at 1.5 doubling times');
+  close(r0, 0, 1e-12, 'zero expansion at start');
+  close(r1, 1 / 3, 1e-9, 'normalized expansion at doubling');
+  close(F.doughVolume(0, 28, o), 1, 1e-12, 'initial volume');
+  close(F.doughVolume(dt, 28, o), 2, 1e-9, 'volume at doubling');
   assert.ok(r0 < r1 && r1 < r2 && r2 <= 1, 'monotonic rise');
 });
 
