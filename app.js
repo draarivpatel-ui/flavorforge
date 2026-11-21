@@ -73,7 +73,7 @@
   var chartStore = {};
 
   function buildLineChart(cfg) {
-    var ink = cssVar('--ink'), ink2 = cssVar('--ink-2'),
+    var ink = cssVar('--ink'),
       grid = cssVar('--grid'), axis = cssVar('--rule-heavy'),
       surface = cssVar('--surface');
     var xMin = cfg.xMin, xMax = cfg.xMax, yMin = cfg.yMin, yMax = cfg.yMax;
