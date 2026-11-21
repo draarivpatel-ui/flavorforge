@@ -176,7 +176,14 @@ test('pin reference draws ghost series and markers across all four charts then c
   const grind = page.get('range-grind'); grind.value = '900'; page.fire(grind, 'input'); page.flushFrame();
   assert.match(page.get('chart-esp').innerHTML, /pinned 600 um/);
 
+  const starch = page.get('select-starch'); starch.value = 'wheat'; page.fire(starch, 'change'); page.flushFrame();
+  assert.match(page.get('legend-gel').innerHTML, /Boba pinned/);
+  assert.match(page.get('pinReadout').textContent, /surface \+20 C/);
+  assert.match(page.get('pinReadout').textContent, /starch Boba/);
+  assert.match(page.get('pinReadout').textContent, /grind \+300 um/);
+
   page.get('pin-reference').click();
+  assert.equal(page.get('pinReadout').textContent, '');
   assert.equal(page.get('pin-reference').getAttribute('aria-pressed'), 'false');
   assert.equal(labPaths(), 1); assert.equal(gelPaths(), 4); assert.equal(risePaths(), 1); assert.equal(espCircles(), 1);
   auditPage(page);

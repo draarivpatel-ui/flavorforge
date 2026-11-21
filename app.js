@@ -500,9 +500,10 @@
       });
     });
     if (pinned) {
+      var pinProf = F.STARCH_PROFILES[pinned.starchProfile] || d.p;
       gelSeries.push({
-        name: d.p.label.split(' / ')[0] + ' pinned', color: ghostInk, dash: '4 4',
-        values: gtemp.map(function (tt) { return F.gelatinizationDegree(tt, pinned.hydrationPct, d.p); })
+        name: pinProf.label.split(' / ')[0] + ' pinned', color: ghostInk, dash: '4 4',
+        values: gtemp.map(function (tt) { return F.gelatinizationDegree(tt, pinned.hydrationPct, pinProf); })
       });
     }
     setLegend('legend-gel', gelSeries);
@@ -566,6 +567,26 @@
     if (jsonArea && document.activeElement !== jsonArea) {
       jsonArea.value = F.exportRecipe(recipe);
     }
+
+    // ----- pinned reference readout
+    var pinEl = document.getElementById('pinReadout');
+    if (pinned) {
+      var sg = function (n) { var r = Math.round(n * 100) / 100; return (r > 0 ? '+' : '') + r; };
+      var pinProfName = (F.STARCH_PROFILES[pinned.starchProfile] || {}).label || pinned.starchProfile;
+      var deltas = [];
+      if (view.surfaceTempC !== pinned.surfaceTempC) deltas.push('surface ' + sg(view.surfaceTempC - pinned.surfaceTempC) + ' C');
+      if (view.EaKj !== pinned.EaKj) deltas.push('Ea ' + sg(view.EaKj - pinned.EaKj) + ' kJ');
+      if (view.fermentTempC !== pinned.fermentTempC) deltas.push('ferment ' + sg(view.fermentTempC - pinned.fermentTempC) + ' C');
+      if (recipe.hydrationPct !== pinned.hydrationPct) deltas.push('hydration ' + sg(recipe.hydrationPct - pinned.hydrationPct) + '%');
+      if (recipe.grindMicrons !== pinned.grindMicrons) deltas.push('grind ' + sg(recipe.grindMicrons - pinned.grindMicrons) + ' um');
+      if (view.starchProfile !== pinned.starchProfile) deltas.push('starch ' + pinProfName.split(' / ')[0]);
+      pinEl.textContent = 'Pinned: ' + pinned.surfaceTempC + ' C surface, ' + pinned.EaKj + ' kJ, ' +
+        pinned.fermentTempC + ' C ferment, ' + pinned.hydrationPct + '% hydration, ' + pinProfName.split(' / ')[0] +
+        ', ' + pinned.grindMicrons + ' um' +
+        (deltas.length ? ' - live deltas: ' + deltas.join(', ') : ' - identical to live settings');
+    } else {
+      pinEl.textContent = '';
+    }
   }
 
   function renderRecipeCard(d) {
@@ -613,7 +634,7 @@
     var suffix = ds.suffix || '';
     var decimals = ds.decimals;
     var num = Number(val);
-    var text = (decimals !== undefined) ? num.toFixed(Number(decimals)) : (Number.isInteger(num) ? String(num) : String(Math.round(num * 10) / 10));
+    var text = (decimals !== undefined) ? num.toFixed(Number(decimals)) : (Number.isInteger(num) ? String(num) : String(Math.round(num * 100) / 100));
     return text + suffix;
   }
 
@@ -740,7 +761,8 @@
       EaKj: view.EaKj,
       fermentTempC: view.fermentTempC,
       hydrationPct: recipe.hydrationPct,
-      grindMicrons: recipe.grindMicrons
+      grindMicrons: recipe.grindMicrons,
+      starchProfile: view.starchProfile
     };
     pinBtn.textContent = pinned ? 'Clear pinned reference' : 'Pin current as reference';
     pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
