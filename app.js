@@ -19,6 +19,7 @@
   var invalidFields = new Set();
   var scheduleStages = F.BROWNING_PRESETS[0].stages.map(function (stage) { return Object.assign({}, stage); });
   var scheduleValid = true;
+  var pinned = null;
 
   // ---- small helpers -----------------------------------------------------
   function cssVar(name) {
@@ -210,7 +211,9 @@
       });
       tip.innerHTML = html;
       tip.hidden = false;
-      tip.style.left = (ev.pageX + 14) + 'px';
+      var tipW = tip.offsetWidth || 240;
+      var maxLeft = (window.scrollX || 0) + (window.innerWidth || document.documentElement.clientWidth || 10000) - tipW - 10;
+      tip.style.left = Math.max(0, Math.min(ev.pageX + 14, maxLeft)) + 'px';
       tip.style.top = (ev.pageY + 12) + 'px';
     });
     overlay.addEventListener('pointerleave', function () {
@@ -348,7 +351,7 @@
         { x: 50, y: tm(50), text: 'Gelatinization transition (Tm)' },
         { x: 50, y: 94, text: 'Amorphous swollen gel' }
       ],
-      markers: [{ x: recipe.hydrationPct, y: clampNum(view.surfaceTempC, yMin, yMax), color: s1, text: 'set point' }]
+      markers: [{ x: recipe.hydrationPct, y: clampNum(view.fermentTempC, yMin, yMax), color: s1, text: 'dough set point' }]
     });
   }
 
@@ -424,8 +427,14 @@
     var s1 = cssVar('--s1'), s2 = cssVar('--s2'), s3 = cssVar('--s3');
 
     // ----- stat tiles: reaction lab
+    var ghostInk = cssVar('--ink-2');
     tile('relativeBrowning', fmt(d.rel, 2) + 'x');
-    tile('relativeBrowningNote', d.rel >= 1 ? 'faster than 150 C baseline' : 'slower than 150 C baseline');
+    var relNote = d.rel >= 1 ? 'faster than 150 C baseline' : 'slower than 150 C baseline';
+    if (pinned) {
+      var pinMail = { A: C.MAILLARD_DEFAULT.A, Ea: pinned.EaKj * 1000, refC: C.MAILLARD_DEFAULT.refC };
+      relNote += '; pinned ' + fmt(F.relativeBrowning(pinned.surfaceTempC, pinMail), 2) + 'x at ' + pinned.surfaceTempC + ' C';
+    }
+    tile('relativeBrowningNote', relNote);
     tile('q10', fmt(d.q10v, 2) + 'x');
     tile('onset', fmt(d.onset, 0) + ' C');
     tile('onsetNote', view.surfaceTempC >= d.onset ? 'above evaporative threshold' : 'pinned by surface moisture');
@@ -455,16 +464,24 @@
     var btemps = [], brels = [];
     for (var t = 100; t <= 240; t += 2) { btemps.push(t); brels.push(F.relativeBrowning(t, d.maillard)); }
     var bMax = Math.max(2, Math.ceil(brels[brels.length - 1]));
+    var labSeries = [{ name: 'Relative rate', color: s1, values: brels }];
+    var labMarkers = [
+      { x: view.surfaceTempC, y: clampNum(d.rel, 0, bMax), color: s1, label: 'set point ' + view.surfaceTempC + ' C', dir: (view.surfaceTempC > 200 ? 'left' : 'right') },
+      { x: d.onset, y: 0.1, color: s2, label: 'onset ' + fmt(d.onset, 0) + ' C', dir: 'right' }
+    ];
+    if (pinned) {
+      var pinBrels = btemps.map(function (tt) { return F.relativeBrowning(tt, pinMail); });
+      bMax = Math.max(bMax, Math.ceil(pinBrels[pinBrels.length - 1]));
+      labSeries.push({ name: 'Pinned reference', color: ghostInk, dash: '4 4', values: pinBrels });
+      labMarkers.push({ x: pinned.surfaceTempC, y: clampNum(F.relativeBrowning(pinned.surfaceTempC, pinMail), 0, bMax), color: ghostInk, label: 'pinned ' + pinned.surfaceTempC + ' C', dir: (pinned.surfaceTempC > 200 ? 'left' : 'right') });
+    }
     setChart('chart-lab', {
       id: 'chart-lab', xValues: btemps, xMin: 100, xMax: 240, yMin: 0, yMax: bMax,
       xLabel: 'Surface temperature (deg C)', yLabel: 'Relative Maillard rate (150 C = 1x)',
       ariaLabel: 'Relative Maillard browning rate versus surface temperature',
-      series: [{ name: 'Relative rate', color: s1, values: brels }],
+      series: labSeries,
       regions: [{ x0: 100, x1: 240, y0: 0, y1: 1, color: s2, opacity: 0.08 }],
-      markers: [
-        { x: view.surfaceTempC, y: clampNum(d.rel, 0, bMax), color: s1, label: 'set point ' + view.surfaceTempC + ' C', dir: (view.surfaceTempC > 200 ? 'left' : 'right') },
-        { x: d.onset, y: 0.1, color: s2, label: 'onset ' + fmt(d.onset, 0) + ' C', dir: 'right' }
-      ],
+      markers: labMarkers,
       endLabels: [{ index: 0, text: fmt(brels[brels.length - 1], 1) + 'x' }],
       tableSample: 7
     });
@@ -482,6 +499,12 @@
         values: gtemp.map(function (tt) { return F.gelatinizationDegree(tt, recipe.hydrationPct, prof); })
       });
     });
+    if (pinned) {
+      gelSeries.push({
+        name: d.p.label.split(' / ')[0] + ' pinned', color: ghostInk, dash: '4 4',
+        values: gtemp.map(function (tt) { return F.gelatinizationDegree(tt, pinned.hydrationPct, d.p); })
+      });
+    }
     setLegend('legend-gel', gelSeries);
     setChart('chart-gel', {
       id: 'chart-gel', xValues: gtemp, xMin: 40, xMax: 100, yMin: 0, yMax: 1,
@@ -494,14 +517,21 @@
 
     // ----- chart: dough rise
     var rtimes = [], rvals = [];
-    var rMax = Math.max(240, d.doubling * 4);
+    var pinDoubling = pinned ? F.doublingTime(pinned.fermentTempC) : 0;
+    var rMax = Math.max(240, d.doubling * 4, pinDoubling * 4);
     for (var ri = 0; ri <= 80; ri++) { var rt = rMax * ri / 80; rtimes.push(rt); rvals.push(F.doughVolume(rt, view.fermentTempC)); }
+    var riseSeries = [{ name: 'Relative dough volume', color: s2, values: rvals }];
+    var riseMarkers = [{ x: d.doubling, y: 2, color: s1, label: '2x at ' + (d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'), dir: 'right' }];
+    if (pinned) {
+      riseSeries.push({ name: 'Pinned reference', color: ghostInk, dash: '4 4', values: rtimes.map(function (tt) { return F.doughVolume(tt, pinned.fermentTempC); }) });
+      riseMarkers.push({ x: pinDoubling, y: 2, color: ghostInk, label: 'pinned 2x at ' + (pinDoubling >= 600 ? fmt(pinDoubling / 60, 1) + ' h' : fmt(pinDoubling, 0) + ' min'), dir: 'left' });
+    }
     setChart('chart-rise', {
       id: 'chart-rise', xValues: rtimes, xMin: 0, xMax: rMax, yMin: 1, yMax: 4,
       xLabel: 'Proofing time (minutes)', yLabel: 'Volume relative to initial dough',
       ariaLabel: 'Relative dough volume rise versus time at the chosen fermentation temperature',
-      series: [{ name: 'Relative dough volume', color: s2, values: rvals }],
-      markers: [{ x: d.doubling, y: 2, color: s1, label: '2x at ' + (d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'), dir: 'right' }],
+      series: riseSeries,
+      markers: riseMarkers,
       endLabels: [{ index: 0, text: 'toward 4x' }],
       tableSample: 8
     });
@@ -516,7 +546,8 @@
       ariaLabel: 'Espresso extraction yield versus grind size with the balanced 18 to 22 percent window shaded',
       series: [{ name: 'Extraction yield', color: s3, values: eys }],
       regions: [{ x0: o.gmin, x1: o.gmax, y0: 18, y1: 22, color: s2, opacity: 0.14, label: 'Balanced extraction window (18 to 22%)' }],
-      markers: [{ x: recipe.grindMicrons, y: clampNum(d.yieldPct, 14, 24), color: s1, label: fmt(d.yieldPct, 1) + '% at ' + recipe.grindMicrons + ' um', dir: (recipe.grindMicrons > 1000 ? 'left' : 'right') }],
+      markers: [{ x: recipe.grindMicrons, y: clampNum(d.yieldPct, 14, 24), color: s1, label: fmt(d.yieldPct, 1) + '% at ' + recipe.grindMicrons + ' um', dir: (recipe.grindMicrons > 1000 ? 'left' : 'right') }]
+        .concat(pinned ? [{ x: pinned.grindMicrons, y: clampNum(F.extractionYield(pinned.grindMicrons, o), 14, 24), color: ghostInk, label: 'pinned ' + fmt(pinned.grindMicrons, 0) + ' um', dir: (pinned.grindMicrons > 1000 ? 'left' : 'right') }] : []),
       endLabels: [{ index: 0, text: fmt(eys[eys.length - 1], 1) + '%' }],
       tableSample: 6
     });
@@ -700,6 +731,21 @@
     try { saved = localStorage.getItem('ff-theme') || 'light'; } catch (e) { /* ignore */ }
     setTheme(saved);
   })();
+
+  // ---- pin reference compare --------------------------------------------
+  var pinBtn = document.getElementById('pin-reference');
+  pinBtn.addEventListener('click', function () {
+    pinned = pinned ? null : {
+      surfaceTempC: view.surfaceTempC,
+      EaKj: view.EaKj,
+      fermentTempC: view.fermentTempC,
+      hydrationPct: recipe.hydrationPct,
+      grindMicrons: recipe.grindMicrons
+    };
+    pinBtn.textContent = pinned ? 'Clear pinned reference' : 'Pin current as reference';
+    pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+    render();
+  });
 
   // ---- espresso solver apply --------------------------------------------
   document.getElementById('apply-grind').addEventListener('click', function () {

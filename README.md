@@ -11,6 +11,7 @@ An offline culinary notebook with recipe scaling, illustrative reaction models, 
 - A grind/yield model and bisection solver with explicit reachable-range feedback.
 - A starter inspector that includes the starter's flour and water in effective hydration and flour already fermented.
 - A printable formula card, labeled regime maps, self-contained SVG downloads, and validated recipe JSON.
+- A pinned-reference comparison that snapshots the current configuration and draws ghost curves and markers beside the live ones on every chart.
 - Linked hydration controls, keyboard tab navigation, optional themes, and visible input/import errors.
 
 These are teaching approximations. They do not predict a particular food, dough culture, or espresso machine. Thermal models omit heat transfer, moisture loss, pH, and measured ingredient-specific parameters. Maillard browning and sugar caramelization are different reactions. The espresso curve uses grind size only; brew temperature is stored and printed in the recipe.
@@ -98,9 +99,9 @@ Run from this repository:
 node --test
 ```
 
-**71 tests pass, with zero failures or skipped tests.** Coverage includes rate identities, finite-number validation, tiny conversions, underflow regressions, all curve endpoints, recipe bounds and Unicode round-trips, starter mass conservation, fermentation doubling, solver endpoints, and exact schedule integration.
+**85 tests pass, with zero failures or skipped tests.** Coverage includes rate identities, finite-number validation, tiny conversions, underflow regressions, all curve endpoints, recipe bounds and Unicode round-trips, starter mass conservation, fermentation doubling, solver endpoints, exact schedule integration, reserved ingredient names, and exact regime boundaries.
 
-The UI tests execute the actual scripts against [dom-harness.cjs](dom-harness.cjs), with fixed time, optional blocked storage, DOM events, and Blob downloads. They verify HTML references, all four starch series, control synchronization, multiword title editing, fractional imports, invalid-input recovery, keyboard tabs, SVG label styles, schedule actions, and clipboard fallback. They do not perform browser layout or visual rendering.
+The UI tests execute the actual scripts against [dom-harness.cjs](dom-harness.cjs), with fixed time, optional blocked storage, DOM events, and Blob downloads. They verify HTML references, all four starch series, control synchronization, multiword title editing, fractional imports, invalid-input recovery, keyboard tabs, SVG label styles, schedule actions, pinned-reference ghost series, the dough-temperature phase marker, and clipboard fallback. They do not perform browser layout or visual rendering.
 
 | File | Purpose |
 | --- | --- |

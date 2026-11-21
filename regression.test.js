@@ -198,3 +198,85 @@ test('both documented schedule presets are deterministic and independently compu
     assert.deepEqual(result, F.browningSchedule(preset.stages));
   }
 });
+
+test('browning onset rises linearly with hydration and clamps outside 0 to 100', () => {
+  close(F.browningOnsetTemp(0), 120);
+  close(F.browningOnsetTemp(100), 175);
+  close(F.browningOnsetTemp(50), 147.5);
+  close(F.browningOnsetTemp(-20), 120);
+  close(F.browningOnsetTemp(240), 175);
+  assert.throws(() => F.browningOnsetTemp(NaN), TypeError);
+});
+
+test('extraction window classifies exact regime boundaries', () => {
+  assert.equal(F.extractionWindow(17.99).key, 'under');
+  assert.equal(F.extractionWindow(18).key, 'ideal');
+  assert.equal(F.extractionWindow(22).key, 'ideal');
+  assert.equal(F.extractionWindow(22.01).key, 'strong');
+  assert.equal(F.extractionWindow(23.5).key, 'strong');
+  assert.equal(F.extractionWindow(23.51).key, 'bitter');
+  assert.equal(F.extractionWindow(0).key, 'under');
+});
+
+test('extraction yield at zero grind equals the model ceiling', () => {
+  close(F.extractionYield(0), F.constants.ESPRESSO_DEFAULT.Emax);
+});
+
+test('recipe scaling rejects every inherited Object.prototype member name', () => {
+  for (const name of ['toString', 'hasOwnProperty', 'valueOf', 'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString', '__proto__', 'constructor']) {
+    assert.throws(() => F.scaleRecipe(1000, JSON.parse('{"' + name + '":5}')), TypeError, name);
+    assert.throws(() => F.totalYieldPercent(JSON.parse('{"' + name + '":5}')), TypeError, name);
+  }
+});
+
+test('schedule locates an exact stage-boundary 50% crossing and keeps dose order-invariant', () => {
+  const boundary = F.browningSchedule([{ tempC: 150, durationMin: 20 }, { tempC: 200, durationMin: 5 }]);
+  close(boundary.timeTo50Min, 20, 1e-9);
+  assert.ok(boundary.stages[0].fraction >= 0.5 - 1e-12);
+  const fwd = F.browningSchedule([{ tempC: 140, durationMin: 10 }, { tempC: 200, durationMin: 10 }]);
+  const rev = F.browningSchedule([{ tempC: 200, durationMin: 10 }, { tempC: 140, durationMin: 10 }]);
+  close(fwd.totalDose, rev.totalDose);
+  close(fwd.fraction, rev.fraction);
+});
+
+test('import rejects JSON scalars and objects missing required fields', () => {
+  for (const text of ['"text"', '42', 'true', 'null']) assert.throws(() => F.importRecipe(text), TypeError, text);
+  const r = F.createRecipe();
+  for (const field of ['name', 'style', 'flourGrams', 'targetYieldPct', 'notes']) {
+    const missing = Object.assign({}, r);
+    delete missing[field];
+    assert.throws(() => F.importRecipe(JSON.stringify(missing)), TypeError, field);
+  }
+});
+
+test('recipe name enforces its exact length window', () => {
+  assert.doesNotThrow(() => F.createRecipe({ name: 'x'.repeat(120) }));
+  assert.throws(() => F.createRecipe({ name: 'x'.repeat(121) }), RangeError);
+  assert.throws(() => F.createRecipe({ name: 'tab\there' }), RangeError);
+});
+
+test('zero-length fermentation curves stay at zero rise and volume respects the capacity asymptote', () => {
+  const flat = F.fermentationCurve(28, 0, 9);
+  assert.equal(flat.length, 9);
+  assert.ok(flat.every(point => point.rise === 0 && point.timeMin === 0));
+  assert.ok(F.doughVolume(1e9, 28) <= 4);
+});
+
+test('Q10 degenerates to one for zero activation energy and A zero gives a zero rate', () => {
+  assert.equal(F.q10(0, 150), 1);
+  assert.equal(F.arrheniusRate(0, 80000, 400), 0);
+});
+
+test('timeToFraction rejects open-interval violations', () => {
+  assert.throws(() => F.timeToFraction(0.1, 0), RangeError);
+  assert.throws(() => F.timeToFraction(0.1, 1), RangeError);
+  assert.throws(() => F.timeToFraction(0, 0.5), RangeError);
+  assert.throws(() => F.timeToFraction(-0.1, 0.5), RangeError);
+});
+
+test('espresso solver lands on the analytic inverse for a mid-curve target', () => {
+  const o = F.constants.ESPRESSO_DEFAULT;
+  const g = F.solveGrindForYield(19, o);
+  const analytic = o.g0 * Math.pow((o.Emax - o.Emin) / (19 - o.Emin) - 1, 1 / o.p);
+  close(g, analytic, 0.5);
+});

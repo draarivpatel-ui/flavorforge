@@ -141,3 +141,55 @@ test('clipboard failure selects valid JSON for a manual copy', async () => {
   assert.equal(page.get('json-area').selected, true);
   assert.match(page.get('import-status').textContent, /Select and copy/);
 });
+
+test('the title stands alone with no tagline or eyebrow text around it', () => {
+  const page = createPage(__dirname);
+  const h1 = page.document.querySelector('h1');
+  assert.equal(h1.textContent, 'FlavorForge');
+  for (const sibling of h1.parentElement.children) assert.equal(sibling.tagName, 'H1');
+  assert.equal(page.document.querySelector('.tagline'), null);
+  assert.equal(page.document.querySelector('.eyebrow, .kicker'), null);
+});
+
+test('pin reference draws ghost series and markers across all four charts then clears', () => {
+  const page = createPage(__dirname);
+  const labPaths = () => page.get('chart-lab').querySelectorAll('path').length;
+  const gelPaths = () => page.get('chart-gel').querySelectorAll('path').length;
+  const risePaths = () => page.get('chart-rise').querySelectorAll('path').length;
+  const espCircles = () => page.get('chart-esp').querySelectorAll('circle').length;
+  assert.equal(labPaths(), 1); assert.equal(gelPaths(), 4); assert.equal(risePaths(), 1); assert.equal(espCircles(), 1);
+
+  page.get('pin-reference').click();
+  assert.equal(page.get('pin-reference').getAttribute('aria-pressed'), 'true');
+  assert.equal(labPaths(), 2); assert.equal(gelPaths(), 5); assert.equal(risePaths(), 2); assert.equal(espCircles(), 2);
+  assert.match(page.get('chart-lab').innerHTML, /pinned 180 C/);
+  const pinRel = F.relativeBrowning(180, { A: F.constants.MAILLARD_DEFAULT.A, Ea: 100000, refC: 150 }).toFixed(2);
+  assert.match(page.document.querySelector('[data-tile="relativeBrowningNote"]').textContent, new RegExp('pinned ' + pinRel.replace('.', '\\.') + 'x at 180 C'));
+  assert.match(page.get('legend-gel').innerHTML, /Boba pinned/);
+
+  const surface = page.get('range-surface'); surface.value = '200'; page.fire(surface, 'input'); page.flushFrame();
+  assert.equal(labPaths(), 2);
+  assert.match(page.get('chart-lab').innerHTML, /set point 200 C[\s\S]*pinned 180 C/);
+  const ferment = page.get('range-ferment-temp'); ferment.value = '40'; page.fire(ferment, 'input'); page.flushFrame();
+  assert.equal(risePaths(), 2);
+  assert.match(page.get('chart-rise').innerHTML, /pinned 2x/);
+  const grind = page.get('range-grind'); grind.value = '900'; page.fire(grind, 'input'); page.flushFrame();
+  assert.match(page.get('chart-esp').innerHTML, /pinned 600 um/);
+
+  page.get('pin-reference').click();
+  assert.equal(page.get('pin-reference').getAttribute('aria-pressed'), 'false');
+  assert.equal(labPaths(), 1); assert.equal(gelPaths(), 4); assert.equal(risePaths(), 1); assert.equal(espCircles(), 1);
+  auditPage(page);
+});
+
+test('the gelatinization phase marker tracks dough temperature not surface temperature', () => {
+  const page = createPage(__dirname);
+  const markerCy = () => Number(page.get('phase-gel').querySelector('circle').getAttribute('cy'));
+  const sy = tempC => 24 + (1 - (Math.min(100, Math.max(40, tempC)) - 40) / 60) * 296;
+  assert.ok(Math.abs(markerCy() - sy(28)) < 0.1, 'default 28 C dough sits in the native band');
+  const ferment = page.get('range-ferment-temp');
+  ferment.value = '60'; page.fire(ferment, 'input'); page.flushFrame();
+  assert.ok(Math.abs(markerCy() - sy(60)) < 0.1, '60 C dough moves into the band');
+  const surface = page.get('range-surface'); surface.value = '240'; page.fire(surface, 'input'); page.flushFrame();
+  assert.ok(Math.abs(markerCy() - sy(60)) < 0.1, 'surface temperature does not move the dough marker');
+});

@@ -232,7 +232,7 @@
   function validatePercentages(percentages) {
     if (!percentages || typeof percentages !== 'object' || Array.isArray(percentages)) throw new TypeError('percentages must be an object');
     Object.keys(percentages).forEach(function (name) {
-      if (['flour', '__proto__', 'constructor', 'prototype'].indexOf(name) !== -1) throw new TypeError('reserved ingredient name: ' + name);
+      if (name === 'flour' || name === 'prototype' || name in Object.prototype) throw new TypeError('reserved ingredient name: ' + name);
       if (!isFiniteNumber(percentages[name]) || percentages[name] < 0) throw new TypeError('percentage for ' + name + ' must be a finite non-negative number');
     });
   }
