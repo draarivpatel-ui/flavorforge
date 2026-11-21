@@ -116,15 +116,27 @@ class Element extends EventTarget {
   get download() { return this.getAttribute('download') || ''; }
   set download(value) { this.setAttribute('download', value); }
   get value() {
-    if (this._value !== undefined) return this._value;
     if (this.tagName === 'SELECT') {
       const options = this.querySelectorAll('option');
+      if (this._value !== undefined) {
+        const match = options.find(option => option.value === this._value);
+        return match ? match.value : '';
+      }
       const chosen = options.find(option => option.hasAttribute('selected')) || options[0];
       return chosen ? chosen.value : '';
     }
+    if (this._value !== undefined) return this._value;
     return this.tagName === 'TEXTAREA' ? this.textContent : this.getAttribute('value') || '';
   }
-  set value(value) { this._value = String(value); }
+  set value(value) {
+    if (this.tagName === 'SELECT') {
+      const options = this.querySelectorAll('option');
+      const match = options.find(option => option.value === String(value));
+      options.forEach(option => option.removeAttribute('selected'));
+      if (match) match.setAttribute('selected', '');
+    }
+    this._value = String(value);
+  }
   get hidden() { return this.hasAttribute('hidden'); }
   set hidden(value) { if (value) this.setAttribute('hidden', ''); else this.removeAttribute('hidden'); }
   get disabled() { return this.hasAttribute('disabled'); }
@@ -274,7 +286,12 @@ function createPage(directory, options = {}) {
     document, window, context, html, blobs, storage, navigator,
     get(id) { const node = document.getElementById(id); assert.ok(node, 'missing element #' + id); return node; },
     fire(target, type, extra = {}) { target.dispatchEvent({ type, bubbles: true, ...extra }); },
-    key(code, type = 'keydown', target = document.body, extra = {}) { window.dispatchEvent({ type, code, target, ...extra }); },
+    key(code, type = 'keydown', target = document.body, extra = {}) {
+      const defaultKey = code.startsWith('Digit') ? code.slice(5)
+        : code.startsWith('Key') ? code.slice(3).toLowerCase()
+        : code;
+      window.dispatchEvent({ type, code, key: defaultKey, target, ...extra });
+    },
     flushFrame(deltaMs = 1000 / 60) { now += deltaMs; const batch = animationFrames.splice(0); for (const callback of batch) callback(now); },
     flushTimers() { const batch = timers.splice(0); for (const callback of batch) callback(); }
   };

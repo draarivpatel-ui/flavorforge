@@ -155,6 +155,25 @@ p { margin: 0.45rem 0; }
 .program-strip a { font-weight: 600; }
 .sep { color: var(--muted); }
 .strip-note { margin-left: auto; color: var(--muted); font-family: var(--font-serif); font-style: italic; }
+.shortcut-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.shortcut-toggle input { accent-color: var(--accent); }
+.checksum-line {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+.checksum-line code { word-break: break-all; }
 
 /* ---- Buttons ---- */
 .btn {

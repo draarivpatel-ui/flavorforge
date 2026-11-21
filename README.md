@@ -10,9 +10,9 @@ An offline culinary notebook with recipe scaling, illustrative reaction models, 
 - A fermentation model whose relative dough volume starts at 1 and reaches 2 at its calibrated doubling time.
 - A grind/yield model and bisection solver with explicit reachable-range feedback.
 - A starter inspector that includes the starter's flour and water in effective hydration and flour already fermented.
-- A printable formula card, labeled regime maps, self-contained SVG downloads, and validated recipe JSON.
+- A printable formula card, labeled regime maps, self-contained SVG downloads, formula-safe CSV export, and validated recipe JSON with a deterministic SHA-256 checksum.
 - A pinned-reference comparison that snapshots the current configuration and draws ghost curves and markers beside the live ones on every chart.
-- Linked hydration controls, keyboard tab navigation, optional themes, and visible input/import errors.
+- Linked hydration controls, keyboard tab navigation, optional themes, a disableable shortcut set (digits 1-6, T, P), and visible input/import errors.
 
 These are teaching approximations. They do not predict a particular food, dough culture, or espresso machine. Thermal models omit heat transfer, moisture loss, pH, and measured ingredient-specific parameters. Maillard browning and sugar caramelization are different reactions. The espresso curve uses grind size only; brew temperature is stored and printed in the recipe.
 
@@ -99,7 +99,7 @@ Run from this repository:
 node --test
 ```
 
-**85 tests pass, with zero failures or skipped tests.** Coverage includes rate identities, finite-number validation, tiny conversions, underflow regressions, all curve endpoints, recipe bounds and Unicode round-trips, starter mass conservation, fermentation doubling, solver endpoints, exact schedule integration, reserved ingredient names, and exact regime boundaries.
+**190 tests pass, with zero failures or skipped tests.** Coverage includes rate identities, finite-number validation, tiny conversions, underflow regressions, all curve endpoints, recipe bounds and Unicode round-trips, starter mass conservation, fermentation doubling, solver convergence and endpoint honesty, exact schedule integration, reserved ingredient names, exact regime boundaries, deterministic SHA-256 export checksums, formula-safe CSV (injection guard, quoting, BOM), and recipe text-field control-character rejection.
 
 The UI tests execute the actual scripts against [dom-harness.cjs](dom-harness.cjs), with fixed time, optional blocked storage, DOM events, and Blob downloads. They verify HTML references, all four starch series, control synchronization, multiword title editing, fractional imports, invalid-input recovery, keyboard tabs, SVG label styles, schedule actions, pinned-reference ghost series, the dough-temperature phase marker, and clipboard fallback. They do not perform browser layout or visual rendering.
 
@@ -108,7 +108,8 @@ The UI tests execute the actual scripts against [dom-harness.cjs](dom-harness.cj
 | [kinetics.js](kinetics.js) | Pure UMD models, recipe validation, and analysis APIs |
 | [app.js](app.js) | Controls, plots, cards, schedule analyzer, and exports |
 | [index.html](index.html), [style.css](style.css) | Notebook, responsive layout, and print styles |
-| [test.js](test.js), [regression.test.js](regression.test.js), [ui.test.js](ui.test.js) | Automated verification |
+| [test.js](test.js), [regression.test.js](regression.test.js), [extended.test.js](extended.test.js) | Automated verification |
+| [ui.test.js](ui.test.js), [ui2.test.js](ui2.test.js), [dom-harness.cjs](dom-harness.cjs) | DOM/controller verification against the real scripts |
 
 ## License
 

@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23fdfbf7'/%3E%3Cpath d='M13 5h6v3l5.5 15.5A3 3 0 0 1 21.7 28H10.3a3 3 0 0 1-2.8-4.5L13 8z' fill='%23b84a24'/%3E%3Ccircle cx='16' cy='22' r='2.4' fill='%23fdfbf7'/%3E%3C/svg%3E">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="FlavorForge is an offline culinary chemistry and reaction kinetics notebook modeling Arrhenius Maillard browning, hydration-shifted starch gelatinization, yeast fermentation, and espresso Hill extraction.">
 <title>FlavorForge | Culinary Reaction Kinetics and Fermentation Notebook</title>
@@ -29,8 +31,9 @@
     </div>
     <div class="header-actions">
       <span class="offline-badge" title="Runs locally in your browser with zero network calls">Offline notebook</span>
-      <button id="pin-reference" class="btn btn-ghost" type="button" aria-pressed="false">Pin current as reference</button>
-      <button id="theme-toggle" class="btn btn-ghost" type="button" aria-pressed="false">Espresso slate</button>
+      <label class="shortcut-toggle" for="shortcuts-toggle"><input id="shortcuts-toggle" type="checkbox" checked>Shortcuts 1-6 T P</label>
+      <button id="pin-reference" class="btn btn-ghost" type="button" aria-pressed="false" aria-keyshortcuts="p">Pin current as reference</button>
+      <button id="theme-toggle" class="btn btn-ghost" type="button" aria-pressed="false" aria-keyshortcuts="t">Espresso slate</button>
     </div>
     <output id="pinReadout" class="pin-readout" role="status" aria-live="polite"></output>
   </div>
@@ -45,12 +48,12 @@
 <p id="control-status" class="control-status" role="status" aria-live="polite"></p>
 
 <nav class="tabs" role="tablist" aria-label="Laboratory notebook sections">
-  <button role="tab" id="tabbtn-lab" aria-controls="tab-lab" aria-selected="true" class="tab active" data-tab="lab">1. Maillard Kinetics</button>
-  <button role="tab" id="tabbtn-dough" aria-controls="tab-dough" aria-selected="false" class="tab" data-tab="dough">2. Starch &amp; Fermentation</button>
-  <button role="tab" id="tabbtn-espresso" aria-controls="tab-espresso" aria-selected="false" class="tab" data-tab="espresso">3. Espresso Extraction</button>
-  <button role="tab" id="tabbtn-card" aria-controls="tab-card" aria-selected="false" class="tab" data-tab="card">4. Bench Formula Sheet</button>
-  <button role="tab" id="tabbtn-phase" aria-controls="tab-phase" aria-selected="false" class="tab" data-tab="phase">5. Phase Diagrams</button>
-  <button role="tab" id="tabbtn-data" aria-controls="tab-data" aria-selected="false" class="tab" data-tab="data">6. Recipe JSON</button>
+  <button role="tab" id="tabbtn-lab" aria-controls="tab-lab" aria-selected="true" class="tab active" data-tab="lab" aria-keyshortcuts="1">1. Maillard Kinetics</button>
+  <button role="tab" id="tabbtn-dough" aria-controls="tab-dough" aria-selected="false" class="tab" data-tab="dough" aria-keyshortcuts="2">2. Starch &amp; Fermentation</button>
+  <button role="tab" id="tabbtn-espresso" aria-controls="tab-espresso" aria-selected="false" class="tab" data-tab="espresso" aria-keyshortcuts="3">3. Espresso Extraction</button>
+  <button role="tab" id="tabbtn-card" aria-controls="tab-card" aria-selected="false" class="tab" data-tab="card" aria-keyshortcuts="4">4. Bench Formula Sheet</button>
+  <button role="tab" id="tabbtn-phase" aria-controls="tab-phase" aria-selected="false" class="tab" data-tab="phase" aria-keyshortcuts="5">5. Phase Diagrams</button>
+  <button role="tab" id="tabbtn-data" aria-controls="tab-data" aria-selected="false" class="tab" data-tab="data" aria-keyshortcuts="6">6. Recipe JSON</button>
 </nav>
 
 <main>
@@ -119,7 +122,7 @@
           <h3>Maillard reaction velocity vs surface temperature</h3>
           <p class="chart-sub">Rate normalized to 150 deg C (1.0x). Markers indicate the evaporative browning onset and active oven set point.</p>
         </div>
-        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-lab">Show tabular data</button>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-lab" aria-controls="table-lab" aria-expanded="false">Show tabular data</button>
       </div>
       <div id="chart-lab" class="chart-slot"></div>
       <div id="table-lab" class="table-wrap" hidden></div>
@@ -206,7 +209,7 @@
           <h3>Botanical starch gelatinization sigmoids</h3>
           <p class="chart-sub">Tapioca, wheat, potato, and rice starch curves at the added-water ratio, distinguished by dash and color.</p>
         </div>
-        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-gel">Show tabular data</button>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-gel" aria-controls="table-gel" aria-expanded="false">Show tabular data</button>
       </div>
       <div class="legend" id="legend-gel" aria-label="Starch series legend"></div>
       <div id="chart-gel" class="chart-slot"></div>
@@ -219,7 +222,7 @@
           <h3>Logistic dough expansion over proofing time</h3>
           <p class="chart-sub">Relative volume starts at 1, reaches 2 at the calibrated doubling time, and approaches 4. This teaching model does not predict a specific dough culture.</p>
         </div>
-        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-rise">Show tabular data</button>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-rise" aria-controls="table-rise" aria-expanded="false">Show tabular data</button>
       </div>
       <div id="chart-rise" class="chart-slot"></div>
       <div id="table-rise" class="table-wrap" hidden></div>
@@ -293,7 +296,7 @@
           <h3>Solubles extraction yield vs median burr grind size</h3>
           <p class="chart-sub">Shaded sage band marks the 18 to 22 percent specialty extraction window.</p>
         </div>
-        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-esp">Show tabular data</button>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="table-esp" aria-controls="table-esp" aria-expanded="false">Show tabular data</button>
       </div>
       <div id="chart-esp" class="chart-slot"></div>
       <div id="table-esp" class="table-wrap" hidden></div>
@@ -344,6 +347,7 @@
       <div class="card-actions">
         <button id="print-card" class="btn" type="button">Print bench formula sheet</button>
         <button id="download-card-svg" class="btn btn-ghost" type="button">Download phase diagram SVG</button>
+        <button id="download-csv" class="btn btn-ghost" type="button">Download formula CSV</button>
       </div>
     </div>
 
@@ -457,6 +461,7 @@
       <div class="panel">
         <h3>Active formula JSON</h3>
         <textarea id="json-area" class="json-area" spellcheck="false" aria-label="Recipe JSON"></textarea>
+        <p class="checksum-line">SHA-256 <code id="recipe-sha"></code></p>
         <div class="data-actions">
           <button id="refresh-json" class="btn btn-ghost btn-sm" type="button">Refresh from notebook</button>
           <button id="copy-json" class="btn btn-ghost btn-sm" type="button">Copy JSON</button>

@@ -35,10 +35,24 @@
     var dec = (typeof d === 'number') ? d : 1;
     return Number(n).toFixed(dec);
   }
+  function fmtDuration(min) {
+    if (!isFinite(min)) { return '-'; }
+    if (min < 600) { return fmt(min, 1) + ' min'; }
+    var hours = min / 60;
+    if (hours < 72) { return fmt(hours, 1) + ' h'; }
+    var days = hours / 24;
+    if (days < 400) { return fmt(days, 1) + ' d'; }
+    var years = days / 365.25;
+    if (years < 10000) { return fmt(years, 1) + ' y'; }
+    return years.toExponential(2) + ' y';
+  }
   function fmtTick(n) {
+    if (Math.abs(n) >= 1e9) { return n.toExponential(1); }
+    if (Math.abs(n) >= 1e6) { return (n / 1e6) + 'M'; }
     if (Math.abs(n) >= 1000) { return (n / 1000) + 'k'; }
     if (Number.isInteger(n)) { return String(n); }
-    return n.toFixed(1);
+    if (Math.abs(n) >= 1) { return n.toFixed(1); }
+    return String(Math.round(n * 100) / 100);
   }
   function clampNum(x, lo, hi) { return Math.min(hi, Math.max(lo, x)); }
 
@@ -438,12 +452,12 @@
     tile('q10', fmt(d.q10v, 2) + 'x');
     tile('onset', fmt(d.onset, 0) + ' C');
     tile('onsetNote', view.surfaceTempC >= d.onset ? 'above evaporative threshold' : 'pinned by surface moisture');
-    tile('halfLife', d.halfLife >= 600 ? fmt(d.halfLife / 60, 1) + ' h' : fmt(d.halfLife, 1) + ' min');
+    tile('halfLife', fmtDuration(d.halfLife));
 
     // ----- stat tiles: dough
     tile('tm', fmt(d.tm, 1) + ' C');
     tile('tmProfile', d.p.label);
-    tile('doubling', d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min');
+    tile('doubling', fmtDuration(d.doubling));
     tile('doublingNote', view.fermentTempC > 46 ? 'thermal yeast denaturation' : 'active metabolic fermentation');
     tile('fermentRel', fmt(d.fermentRel, 2) + 'x');
     tile('t90', fmt(d.t90, 1) + ' C');
@@ -522,10 +536,10 @@
     var rMax = Math.max(240, d.doubling * 4, pinDoubling * 4);
     for (var ri = 0; ri <= 80; ri++) { var rt = rMax * ri / 80; rtimes.push(rt); rvals.push(F.doughVolume(rt, view.fermentTempC)); }
     var riseSeries = [{ name: 'Relative dough volume', color: s2, values: rvals }];
-    var riseMarkers = [{ x: d.doubling, y: 2, color: s1, label: '2x at ' + (d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'), dir: 'right' }];
+    var riseMarkers = [{ x: d.doubling, y: 2, color: s1, label: '2x at ' + fmtDuration(d.doubling), dir: 'right' }];
     if (pinned) {
       riseSeries.push({ name: 'Pinned reference', color: ghostInk, dash: '4 4', values: rtimes.map(function (tt) { return F.doughVolume(tt, pinned.fermentTempC); }) });
-      riseMarkers.push({ x: pinDoubling, y: 2, color: ghostInk, label: 'pinned 2x at ' + (pinDoubling >= 600 ? fmt(pinDoubling / 60, 1) + ' h' : fmt(pinDoubling, 0) + ' min'), dir: 'left' });
+      riseMarkers.push({ x: pinDoubling, y: 2, color: ghostInk, label: 'pinned 2x at ' + fmtDuration(pinDoubling), dir: 'left' });
     }
     setChart('chart-rise', {
       id: 'chart-rise', xValues: rtimes, xMin: 0, xMax: rMax, yMin: 1, yMax: 4,
@@ -567,18 +581,23 @@
     if (jsonArea && document.activeElement !== jsonArea) {
       jsonArea.value = F.exportRecipe(recipe);
     }
+    var shaEl = document.getElementById('recipe-sha');
+    if (shaEl && document.activeElement !== jsonArea) { shaEl.textContent = F.recipeChecksum(recipe); }
 
     // ----- pinned reference readout
     var pinEl = document.getElementById('pinReadout');
     if (pinned) {
-      var sg = function (n) { var r = Math.round(n * 100) / 100; return (r > 0 ? '+' : '') + r; };
       var pinProfName = (F.STARCH_PROFILES[pinned.starchProfile] || {}).label || pinned.starchProfile;
       var deltas = [];
-      if (view.surfaceTempC !== pinned.surfaceTempC) deltas.push('surface ' + sg(view.surfaceTempC - pinned.surfaceTempC) + ' C');
-      if (view.EaKj !== pinned.EaKj) deltas.push('Ea ' + sg(view.EaKj - pinned.EaKj) + ' kJ');
-      if (view.fermentTempC !== pinned.fermentTempC) deltas.push('ferment ' + sg(view.fermentTempC - pinned.fermentTempC) + ' C');
-      if (recipe.hydrationPct !== pinned.hydrationPct) deltas.push('hydration ' + sg(recipe.hydrationPct - pinned.hydrationPct) + '%');
-      if (recipe.grindMicrons !== pinned.grindMicrons) deltas.push('grind ' + sg(recipe.grindMicrons - pinned.grindMicrons) + ' um');
+      var pushDelta = function (label, cur, pin, suffix) {
+        var diff = Math.round((cur - pin) * 100) / 100;
+        if (diff !== 0) { deltas.push(label + ' ' + (diff > 0 ? '+' : '') + diff + suffix); }
+      };
+      pushDelta('surface', view.surfaceTempC, pinned.surfaceTempC, ' C');
+      pushDelta('Ea', view.EaKj, pinned.EaKj, ' kJ');
+      pushDelta('ferment', view.fermentTempC, pinned.fermentTempC, ' C');
+      pushDelta('hydration', recipe.hydrationPct, pinned.hydrationPct, '%');
+      pushDelta('grind', recipe.grindMicrons, pinned.grindMicrons, ' um');
       if (view.starchProfile !== pinned.starchProfile) deltas.push('starch ' + pinProfName.split(' / ')[0]);
       pinEl.textContent = 'Pinned: ' + pinned.surfaceTempC + ' C surface, ' + pinned.EaKj + ' kJ, ' +
         pinned.fermentTempC + ' C ferment, ' + pinned.hydrationPct + '% hydration, ' + pinProfName.split(' / ')[0] +
@@ -616,7 +635,7 @@
       ['Flour already fermented', fmt(d.scaled.prefermentedFlourPct, 2) + ' %'],
       ['Gelatinization midpoint Tm', fmt(d.tm, 1) + ' deg C (' + d.p.label.split(' / ')[0] + ')'],
       ['Proofing temperature', fmt(view.fermentTempC, 0) + ' deg C'],
-      ['Predicted doubling time', d.doubling >= 600 ? fmt(d.doubling / 60, 1) + ' h' : fmt(d.doubling, 0) + ' min'],
+      ['Predicted doubling time', fmtDuration(d.doubling)],
       ['Maillard browning onset', fmt(d.onset, 0) + ' deg C at ' + fmt(recipe.hydrationPct, 0) + '% hydration'],
       ['Burr grind median setting', fmt(recipe.grindMicrons, 0) + ' um'],
       ['Predicted solubles yield', fmt(d.yieldPct, 1) + ' % (' + d.ewin.label + ')'],
@@ -669,7 +688,7 @@
       el.setAttribute('aria-invalid', 'true');
       document.getElementById('control-status').textContent = 'Invalid input: ' + error.message + '. The notebook keeps the last valid values.';
     }
-    ['download-json', 'print-card', 'download-card-svg'].forEach(function (id) { document.getElementById(id).disabled = invalidFields.size > 0; });
+    ['download-json', 'print-card', 'download-card-svg', 'download-csv'].forEach(function (id) { document.getElementById(id).disabled = invalidFields.size > 0; });
     scheduleRender();
   }
 
@@ -769,6 +788,39 @@
     render();
   });
 
+  // ---- keyboard shortcuts ------------------------------------------------
+  // Single-character shortcuts get a persisted off switch (WCAG 2.1.4) and
+  // never fire while the user is typing in a field or composing text.
+  var shortcutBox = document.getElementById('shortcuts-toggle');
+  var shortcutsEnabled = true;
+  try { shortcutsEnabled = localStorage.getItem('ff-shortcuts') !== 'off'; } catch (e) { /* ignore */ }
+  if (shortcutBox) {
+    shortcutBox.checked = shortcutsEnabled;
+    shortcutBox.addEventListener('change', function () {
+      shortcutsEnabled = shortcutBox.checked;
+      try { localStorage.setItem('ff-shortcuts', shortcutsEnabled ? 'on' : 'off'); } catch (e) { /* ignore */ }
+    });
+  }
+  window.addEventListener('keydown', function (event) {
+    if (!shortcutsEnabled || event.isComposing || event.repeat ||
+        event.ctrlKey || event.metaKey || event.altKey) { return; }
+    var target = event.target;
+    if (target && target.closest && target.closest('input, textarea, select, [contenteditable]')) { return; }
+    // Digits match the typed character so layouts that need Shift for digits
+    // (AZERTY) and the numpad both work; on QWERTY Shift+1 types '!' and
+    // naturally misses this check.
+    if (/^[1-6]$/.test(event.key || '')) {
+      var tabs = document.querySelectorAll('.tab');
+      var btn = tabs[Number(event.key) - 1];
+      if (btn) { event.preventDefault(); btn.click(); btn.focus(); }
+      return;
+    }
+    if (event.shiftKey) { return; }
+    var letter = (event.key || '').toLowerCase();
+    if (letter === 't') { event.preventDefault(); themeBtn.click(); }
+    else if (letter === 'p') { event.preventDefault(); pinBtn.click(); }
+  });
+
   // ---- espresso solver apply --------------------------------------------
   document.getElementById('apply-grind').addEventListener('click', function () {
     var d = computeDerived();
@@ -786,6 +838,7 @@
     var svgEl = document.querySelector('#' + containerId + ' svg');
     if (!svgEl) { return; }
     var clone = svgEl.cloneNode(true);
+    clone.querySelectorAll('.ff-hover, .ff-crosshair').forEach(function (n) { n.remove(); });
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     var style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
     style.textContent = '.ff-tick,.ff-mark-label,.ff-end-label{fill:' + cssVar('--ink') + ';font:12px monospace}' +
@@ -809,13 +862,23 @@
   });
 
   // ---- JSON actions ------------------------------------------------------
+  // Keep the checksum line glued to whatever text the box displays.
+  function writeJsonArea(text) {
+    document.getElementById('json-area').value = text;
+    var shaEl = document.getElementById('recipe-sha');
+    if (shaEl) { shaEl.textContent = F.sha256(text); }
+  }
+  document.getElementById('json-area').addEventListener('input', function (event) {
+    var shaEl = document.getElementById('recipe-sha');
+    if (shaEl) { shaEl.textContent = F.sha256(event.target.value); }
+  });
   document.getElementById('refresh-json').addEventListener('click', function () {
-    document.getElementById('json-area').value = F.exportRecipe(recipe);
+    writeJsonArea(F.exportRecipe(recipe));
   });
   document.getElementById('copy-json').addEventListener('click', function () {
     var area = document.getElementById('json-area');
     var text = F.exportRecipe(recipe);
-    area.value = text;
+    writeJsonArea(text);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () {
         flashStatus('Copied recipe JSON to clipboard.', true);
@@ -835,6 +898,15 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   });
+  document.getElementById('download-csv').addEventListener('click', function () {
+    var text = F.recipeCSV(recipe);
+    var blob = new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'flavorforge-formula.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  });
   document.getElementById('import-json').addEventListener('click', function () {
     var area = document.getElementById('import-area');
     var text = (area.value.trim() || document.getElementById('json-area').value);
@@ -843,10 +915,10 @@
       recipe = parsed;
       invalidFields.clear();
       document.querySelectorAll('[data-field]').forEach(function (el) { el.setAttribute('aria-invalid', 'false'); });
-      ['download-json', 'print-card', 'download-card-svg'].forEach(function (id) { document.getElementById(id).disabled = false; });
+      ['download-json', 'print-card', 'download-card-svg', 'download-csv'].forEach(function (id) { document.getElementById(id).disabled = false; });
       document.getElementById('control-status').textContent = '';
       syncControls();
-      document.getElementById('json-area').value = F.exportRecipe(recipe);
+      writeJsonArea(F.exportRecipe(recipe));
       area.value = '';
       render();
       flashStatus('Imported "' + parsed.name + '" into the lab notebook.', true);

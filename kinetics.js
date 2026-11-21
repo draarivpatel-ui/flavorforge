@@ -402,13 +402,25 @@
       );
     }
     var lo = o.gmin, hi = o.gmax;
-    for (var i = 0; i < 200; i++) {
-      var mid = lo + (hi - lo) / 2;
+    // Run to the float fixpoint instead of a fixed count: on a domain wider
+    // than ~1e60x the answer, 200 halvings cannot reach the crossing.
+    var mid;
+    for (var i = 0; i < 2200; i++) {
+      mid = lo + (hi - lo) / 2;
+      if (mid === lo || mid === hi) { break; }
       var e = extractionYield(mid, o);
       if (e > targetYield) { lo = mid; } // need coarser grind to lower yield
       else { hi = mid; }                 // need finer grind to raise yield
     }
-    return lo + (hi - lo) / 2;
+    var g = lo + (hi - lo) / 2;
+    // Honesty check: the returned grind must actually land on the target. A
+    // step-like curve can straddle the target inside one float bracket with
+    // no representable g reaching it; the honest answer there is to throw.
+    var err = Math.abs(extractionYield(g, o) - targetYield);
+    if (!isFiniteNumber(err) || err > 1e-3) {
+      throw new RangeError('solveGrindForYield: no grind reaches the target yield');
+    }
+    return g;
   }
 
   function extractionWindow(yieldPct) {
@@ -435,6 +447,143 @@
       out.push({ grindMicrons: g, yieldPct: extractionYield(g, opts) });
     }
     return out;
+  }
+
+  // -- Deterministic SHA-256 ------------------------------------------------
+  // Pure-implementation digest so recipe checksums work offline with no
+  // dependency on Web Crypto or Node crypto.
+
+  var SHA256_K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+
+  function rotr32(x, n) { return ((x >>> n) | (x << (32 - n))) >>> 0; }
+
+  // UTF-8 encode without TextEncoder so the digest works in every host.
+  // Lone surrogates become U+FFFD, matching TextEncoder behavior.
+  function utf8Bytes(str) {
+    var s = String(str);
+    var out = [];
+    for (var i = 0; i < s.length; i++) {
+      var code = s.charCodeAt(i);
+      if (code < 0x80) {
+        out.push(code);
+      } else if (code < 0x800) {
+        out.push(0xc0 | (code >> 6), 0x80 | (code & 63));
+      } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < s.length && s.charCodeAt(i + 1) >= 0xdc00 && s.charCodeAt(i + 1) <= 0xdfff) {
+        var cp = 0x10000 + ((code - 0xd800) << 10) + (s.charCodeAt(i + 1) - 0xdc00);
+        out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+        i++;
+      } else if (code >= 0xd800 && code <= 0xdfff) {
+        out.push(0xef, 0xbf, 0xbd);
+      } else {
+        out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 63), 0x80 | (code & 63));
+      }
+    }
+    return out;
+  }
+
+  function sha256(text) {
+    var bytes = utf8Bytes(text);
+    var bitLen = bytes.length * 8;
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) bytes.push(0);
+    var hiLen = Math.floor(bitLen / 0x100000000), loLen = bitLen >>> 0;
+    bytes.push((hiLen >>> 24) & 255, (hiLen >>> 16) & 255, (hiLen >>> 8) & 255, hiLen & 255);
+    bytes.push((loLen >>> 24) & 255, (loLen >>> 16) & 255, (loLen >>> 8) & 255, loLen & 255);
+
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+    var w = new Array(64);
+    for (var off = 0; off < bytes.length; off += 64) {
+      for (var i = 0; i < 16; i++) {
+        w[i] = ((bytes[off + i * 4] << 24) | (bytes[off + i * 4 + 1] << 16) | (bytes[off + i * 4 + 2] << 8) | bytes[off + i * 4 + 3]) >>> 0;
+      }
+      for (i = 16; i < 64; i++) {
+        var s0 = rotr32(w[i - 15], 7) ^ rotr32(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        var s1 = rotr32(w[i - 2], 17) ^ rotr32(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      }
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (i = 0; i < 64; i++) {
+        var S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+        var ch = (e & f) ^ (~e & g);
+        var t1 = (h + S1 + ch + SHA256_K[i] + w[i]) >>> 0;
+        var S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+        var maj = (a & b) ^ (a & c) ^ (b & c);
+        var t2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+      H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+    }
+    var hex = '';
+    for (i = 0; i < 8; i++) { hex += ('0000000' + H[i].toString(16)).slice(-8); }
+    return hex;
+  }
+
+  // -- Formula-safe CSV -----------------------------------------------------
+  // Spreadsheet formula-injection guard: a string cell whose first
+  // non-whitespace, non-format character is =, +, -, or @ gets a leading
+  // apostrophe. Numbers are emitted raw so the file stays numeric; they can
+  // never carry a payload.
+
+  function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'number') {
+      if (!isFiniteNumber(value)) throw new TypeError('csvEscape: numeric cells must be finite');
+      return String(value);
+    }
+    var s = String(value);
+    // A payload hidden behind whitespace or invisible format chars stays
+    // guarded: the apostrophe lands first, so trimming still sees a literal.
+    var first = s.replace(/^[\s\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\uFFF9-\uFFFB]+/, '').charAt(0);
+    if (first !== '' && '=+-@'.indexOf(first) !== -1) { s = "'" + s; }
+    if (/[",\n\r]/.test(s)) { s = '"' + s.replace(/"/g, '""') + '"'; }
+    return s;
+  }
+
+  function toCSV(rows) {
+    if (!Array.isArray(rows)) throw new TypeError('toCSV: rows must be an array');
+    return rows.map(function (row, index) {
+      if (!Array.isArray(row)) throw new TypeError('toCSV: row ' + index + ' must be an array');
+      return row.map(csvEscape).join(',');
+    }).join('\r\n') + '\r\n';
+  }
+
+  // Long-format CSV of the scaled formula and starter analysis. The meta
+  // section carries free text (name, notes) through the same injection guard.
+  function recipeCSV(recipe) {
+    var r = validateRecipe(recipe);
+    var a = analyzeDoughRecipe(r);
+    return toCSV([
+      ['section', 'item', 'baker_pct', 'mass_g'],
+      ['formula', 'flour', 100, a.weights.flour],
+      ['formula', 'water', r.hydrationPct, a.weights.water],
+      ['formula', 'salt', r.saltPct, a.weights.salt],
+      ['formula', 'starter', r.starterPct, a.weights.starter],
+      ['formula', 'total', a.totalPercent, a.totalWeight],
+      ['starter', 'flour', null, a.starterFlour],
+      ['starter', 'water', null, a.starterWater],
+      ['summary', 'total flour', null, a.totalFlour],
+      ['summary', 'total water', null, a.totalWater],
+      ['summary', 'effective hydration pct', null, a.effectiveHydrationPct],
+      ['summary', 'prefermented flour pct', null, a.prefermentedFlourPct],
+      ['meta', 'name', null, r.name],
+      ['meta', 'style', null, r.style],
+      ['meta', 'notes', null, r.notes],
+      ['meta', 'sha256', null, recipeChecksum(r)]
+    ]);
+  }
+
+  function recipeChecksum(recipe) {
+    return sha256(exportRecipe(recipe));
   }
 
   // -- Recipe schema, import / export --------------------------------------
@@ -508,8 +657,8 @@
           throw new TypeError('validateRecipe: field ' + f + ' must be a string');
         }
         if (f === 'style' && RECIPE_STYLES.indexOf(v) === -1) throw new TypeError('validateRecipe: unsupported style');
-        if (f === 'name' && (!v.trim() || v.length > 120 || /[\x00-\x1f\x7f]/.test(v))) throw new RangeError('recipe name needs 1 to 120 characters without control characters');
-        if (f === 'notes' && v.length > 4000) throw new RangeError('recipe notes exceed 4000 characters');
+        if (f === 'name' && (!v.trim() || v.length > 120 || /[\x00-\x1f\x7f-\x9f]/.test(v))) throw new RangeError('recipe name needs 1 to 120 characters without control characters');
+        if (f === 'notes' && (v.length > 4000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(v))) throw new RangeError('recipe notes need at most 4000 characters without control characters');
         out[f] = f === 'name' ? v.trim() : v;
       }
     });
@@ -598,6 +747,11 @@
     createRecipe: createRecipe,
     validateRecipe: validateRecipe,
     exportRecipe: exportRecipe,
-    importRecipe: importRecipe
+    importRecipe: importRecipe,
+    sha256: sha256,
+    csvEscape: csvEscape,
+    toCSV: toCSV,
+    recipeCSV: recipeCSV,
+    recipeChecksum: recipeChecksum
   };
 });
