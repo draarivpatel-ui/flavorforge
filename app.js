@@ -21,6 +21,13 @@
   var scheduleValid = true;
   var pinned = null;
 
+  // The Process & Sensitivity Lab is optional: if process-lab.js failed to
+  // load, its tab and panel hide and every lab hook stays inert.
+  var LAB = window.FlavorForgeLab || null;
+  var labProfileKey = LAB ? LAB.STATE_DEFAULTS.profile : 'steady-180';
+  var LAB_COLORS = ['--s1', '--s2', '--s3', '--s4', '--muted'];
+  var LAB_SHORT = ['180', '140/200', '230/190', '150', '220'];
+
   // ---- small helpers -----------------------------------------------------
   function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -584,6 +591,9 @@
     var shaEl = document.getElementById('recipe-sha');
     if (shaEl && document.activeElement !== jsonArea) { shaEl.textContent = F.recipeChecksum(recipe); }
 
+    // ----- process & sensitivity lab
+    if (LAB) { renderProcessLab(); }
+
     // ----- pinned reference readout
     var pinEl = document.getElementById('pinReadout');
     if (pinned) {
@@ -729,7 +739,7 @@
       });
     });
     btn.addEventListener('keydown', function (event) {
-      var tabs = Array.from(document.querySelectorAll('.tab'));
+      var tabs = Array.from(document.querySelectorAll('.tab')).filter(function (t) { return !t.hidden; });
       var index = tabs.indexOf(btn), next = index;
       if (event.code === 'ArrowRight') next = (index + 1) % tabs.length;
       else if (event.code === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
@@ -996,6 +1006,314 @@
       document.getElementById('schedule-table').innerHTML = '';
     }
   });
+
+  // ---- process & sensitivity lab ----------------------------------------
+  function labState() {
+    return {
+      profile: labProfileKey,
+      EaKj: view.EaKj,
+      starch: view.starchProfile,
+      hyd: recipe.hydrationPct,
+      fermT: view.fermentTempC,
+      yieldT: recipe.targetYieldPct,
+      flourGrams: recipe.flourGrams,
+      saltPct: recipe.saltPct,
+      starterPct: recipe.starterPct,
+      starterHydrationPct: recipe.starterHydrationPct
+    };
+  }
+
+  function labFlash(msg, ok) {
+    var el = document.getElementById('lab-export-status');
+    if (!el) { return; }
+    el.textContent = msg;
+    el.className = 'import-status ' + (ok ? 'ok' : 'bad');
+  }
+
+  function labDownload(text, filename, mime) {
+    var blob = new Blob([text], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // Compact chart with keyboard-focusable curves and point markers. Unlike
+  // buildLineChart, each series carries its own point list, so it can draw
+  // piecewise curves at their exact stage-boundary kinks.
+  function labChartSVG(cfg) {
+    var W = 760, H = 340, Lm = 56, Rm = 128, Tm = 20, Bm = 44;
+    var pw = W - Lm - Rm, ph = H - Tm - Bm;
+    var axis = cssVar('--rule-heavy'), grid = cssVar('--grid'), surface = cssVar('--surface');
+    function sx(v) { return Lm + (v - cfg.xMin) / (cfg.xMax - cfg.xMin) * pw; }
+    function sy(v) { return Tm + (1 - (v - cfg.yMin) / (cfg.yMax - cfg.yMin)) * ph; }
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + W + ' ' + H + '" class="ff-chart" role="img" aria-label="' + esc(cfg.ariaLabel) + '">');
+    s.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="' + surface + '"/>');
+    ticks(cfg.yMin, cfg.yMax, 5).forEach(function (t) {
+      var y = sy(t);
+      s.push('<line x1="' + Lm + '" y1="' + y.toFixed(1) + '" x2="' + (Lm + pw) + '" y2="' + y.toFixed(1) + '" stroke="' + grid + '" stroke-width="1"/>');
+      s.push('<text x="' + (Lm - 9) + '" y="' + y.toFixed(1) + '" text-anchor="end" dominant-baseline="middle" class="ff-tick">' + fmtTick(t) + '</text>');
+    });
+    ticks(cfg.xMin, cfg.xMax, 6).forEach(function (t) {
+      var x = sx(t);
+      s.push('<line x1="' + x.toFixed(1) + '" y1="' + Tm + '" x2="' + x.toFixed(1) + '" y2="' + (Tm + ph) + '" stroke="' + grid + '" stroke-width="1"/>');
+      s.push('<text x="' + x.toFixed(1) + '" y="' + (Tm + ph + 18) + '" text-anchor="middle" class="ff-tick">' + fmtTick(t) + '</text>');
+    });
+    (cfg.hlines || []).forEach(function (hl) {
+      var y = sy(hl.y);
+      s.push('<line x1="' + Lm + '" y1="' + y.toFixed(1) + '" x2="' + (Lm + pw) + '" y2="' + y.toFixed(1) + '" stroke="' + hl.color + '" stroke-width="1.3" stroke-dasharray="5 4"/>');
+      if (hl.label) {
+        s.push('<text x="' + (Lm + 5) + '" y="' + (y - 6) + '" class="ff-mark-label">' + esc(hl.label) + '</text>');
+      }
+    });
+    s.push('<line x1="' + Lm + '" y1="' + Tm + '" x2="' + Lm + '" y2="' + (Tm + ph) + '" stroke="' + axis + '" stroke-width="1.4"/>');
+    s.push('<line x1="' + Lm + '" y1="' + (Tm + ph) + '" x2="' + (Lm + pw) + '" y2="' + (Tm + ph) + '" stroke="' + axis + '" stroke-width="1.4"/>');
+
+    cfg.series.forEach(function (ser) {
+      var d = '';
+      ser.points.forEach(function (p, i) {
+        d += (i === 0 ? 'M' : 'L') + sx(p.x).toFixed(1) + ' ' + sy(p.y).toFixed(1) + ' ';
+      });
+      s.push('<path class="lab-curve" tabindex="0" d="' + d.trim() + '" fill="none" stroke="' + ser.color +
+        '" stroke-width="' + (ser.active ? 3.2 : 2.1) + '" stroke-linejoin="round" stroke-linecap="round"' +
+        (ser.dash ? ' stroke-dasharray="' + ser.dash + '"' : '') + '><title>' + esc(ser.name) + '</title></path>');
+    });
+
+    // Spread series end labels so stacked end points stay readable.
+    var ends = cfg.series.map(function (ser) {
+      var last = ser.points[ser.points.length - 1];
+      return { ser: ser, x: sx(last.x), y: sy(last.y) };
+    }).sort(function (a, b) { return a.y - b.y; });
+    for (var i = 1; i < ends.length; i++) {
+      if (ends[i].y - ends[i - 1].y < 13) { ends[i].y = ends[i - 1].y + 13; }
+    }
+    ends.forEach(function (e) {
+      s.push('<text x="' + (e.x + 7).toFixed(1) + '" y="' + (e.y + 4).toFixed(1) + '" class="ff-end-label" fill="' + e.ser.color + '">' + esc(e.ser.short) + '</text>');
+    });
+
+    (cfg.markers || []).forEach(function (m) {
+      s.push('<circle class="lab-pt" tabindex="0" cx="' + sx(m.x).toFixed(1) + '" cy="' + sy(m.y).toFixed(1) +
+        '" r="' + (m.active ? 6 : 4.6) + '" fill="' + m.color + '" stroke="' + surface + '" stroke-width="2"><title>' + esc(m.label) + '</title></circle>');
+    });
+
+    s.push('<text x="' + (Lm + pw / 2) + '" y="' + (H - 6) + '" text-anchor="middle" class="ff-axis-title">' + esc(cfg.xLabel) + '</text>');
+    s.push('<text transform="translate(15 ' + (Tm + ph / 2) + ') rotate(-90)" text-anchor="middle" class="ff-axis-title">' + esc(cfg.yLabel) + '</text>');
+    s.push('</svg>');
+    return s.join('');
+  }
+
+  function renderProcessLab() {
+    var st = labState();
+    var stamped = LAB.stampedReport(st);
+    var report = stamped.report;
+    var opts = LAB.maillardOpts(st);
+    var colors = LAB_COLORS.map(function (v) { return cssVar(v); });
+
+    var digestEl = document.getElementById('lab-digest');
+    if (digestEl) { digestEl.textContent = stamped.digest; }
+
+    // ----- comparator table
+    var tbl = '<table class="data-table"><thead><tr>' +
+      ['Profile', 'Stages', 'Total min', 'Dose', 'X final', '50% at min', 'Dose temp C', 'Q10', 'Yeast margin C', 'Actions']
+        .map(function (h) { return '<th scope="col">' + esc(h) + '</th>'; }).join('') +
+      '</tr></thead><tbody>';
+    report.thermal.forEach(function (r) {
+      var stageTxt = r.stages.map(function (s) { return s.tempC + ' C x ' + s.durationMin + ' min'; }).join('; ');
+      tbl += '<tr' + (r.active ? ' class="lab-active-row"' : '') + '>' +
+        '<td>' + esc(r.name) + '<div class="lab-note">' + esc(r.note) + '</div></td>' +
+        '<td>' + esc(stageTxt) + '</td>' +
+        '<td>' + fmt(r.totalMin, 1) + '</td>' +
+        '<td>' + fmt(r.totalDose, 4) + '</td>' +
+        '<td>' + fmt(r.conversionX, 4) + '</td>' +
+        '<td>' + (r.crosses50 ? fmt(r.timeTo50Min, 2) : 'never') + '</td>' +
+        '<td>' + fmt(r.doseTempC, 1) + '</td>' +
+        '<td>' + fmt(r.effectiveQ10, 3) + '</td>' +
+        '<td>' + fmt(r.yeastMarginC, 0) + '</td>' +
+        '<td class="lab-profile-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm lab-use" data-profile="' + esc(r.key) + '"' +
+            (r.active ? ' disabled aria-pressed="true"' : '') + '>' + (r.active ? 'Active' : 'Use') + '</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm lab-load" data-profile="' + esc(r.key) + '">Load</button>' +
+        '</td></tr>';
+    });
+    tbl += '</tbody></table>';
+    var tableEl = document.getElementById('lab-profile-table');
+    tableEl.innerHTML = tbl;
+    tableEl.querySelectorAll('.lab-use').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        labProfileKey = btn.dataset.profile;
+        renderProcessLab();
+      });
+    });
+    tableEl.querySelectorAll('.lab-load').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var p = LAB.profileByKey(btn.dataset.profile);
+        if (!p) { return; }
+        scheduleStages = p.stages.map(function (stage) { return Object.assign({}, stage); });
+        scheduleValid = true;
+        document.getElementById('schedule-json').value = JSON.stringify(scheduleStages, null, 2);
+        renderSchedule(computeDerived().maillard);
+        document.getElementById('tabbtn-lab').click();
+      });
+    });
+
+    // ----- conversion chart X(t)
+    var times = LAB.unionChartTimes(LAB.THERMAL_PROFILES, 140);
+    var xMax = times[times.length - 1];
+    var convSeries = report.thermal.map(function (r, i) {
+      var curve = LAB.conversionCurve(r.stages, opts, times);
+      return {
+        name: r.name, short: LAB_SHORT[i], color: colors[i], active: r.active,
+        points: curve.map(function (p) { return { x: p.t, y: p.x }; })
+      };
+    });
+    var convMarkers = report.thermal.map(function (r, i) {
+      if (!r.crosses50) { return null; }
+      return { x: r.timeTo50Min, y: 0.5, color: colors[i], active: r.active, label: r.name + ': 50% at ' + fmt(r.timeTo50Min, 2) + ' min' };
+    }).filter(Boolean);
+    setLegend('lab-legend-conv', convSeries.map(function (ser) { return { name: ser.name, color: ser.color }; }));
+    document.getElementById('lab-chart-conversion').innerHTML = labChartSVG({
+      xMin: 0, xMax: xMax, yMin: 0, yMax: 1,
+      xLabel: 'Elapsed time (minutes)', yLabel: 'Browning conversion X(t)',
+      ariaLabel: 'Browning conversion versus time for the five thermal process profiles',
+      series: convSeries, markers: convMarkers,
+      hlines: [{ y: 0.5, color: cssVar('--ink-2'), label: 'X = 0.5' }]
+    });
+    var stepN = Math.max(1, Math.floor(times.length / 9));
+    var convRows = [];
+    for (var ti = 0; ti < times.length; ti += stepN) {
+      var row = { t: fmtTick(Math.round(times[ti] * 100) / 100) };
+      convSeries.forEach(function (ser) { row[ser.name] = fmt(ser.points[ti].y, 4); });
+      convRows.push(row);
+    }
+    document.getElementById('lab-conversion-table').innerHTML = buildTable(
+      [{ label: 'Time (min)', key: 't' }].concat(convSeries.map(function (ser) { return { label: ser.name, key: ser.name }; })),
+      convRows);
+
+    // ----- Tm sensitivity chart + matrix
+    var sens = report.sensitivity;
+    var starchKeys = Object.keys(sens.starchTm);
+    var tmAll = [];
+    starchKeys.forEach(function (k) { tmAll = tmAll.concat(sens.starchTm[k].tm); });
+    var tmMin = Math.floor(Math.min.apply(null, tmAll) - 3);
+    var tmMax = Math.ceil(Math.max.apply(null, tmAll) + 3);
+    var tmSeries = starchKeys.map(function (k, i) {
+      var entry = sens.starchTm[k];
+      return {
+        name: entry.label, short: entry.label.split(' / ')[0].split(' ')[0], color: colors[i], active: k === st.starch,
+        points: sens.hydrations.map(function (h, j) { return { x: h, y: entry.tm[j] }; })
+      };
+    });
+    var tmMarkers = [];
+    tmSeries.forEach(function (ser) {
+      ser.points.forEach(function (p, j) {
+        tmMarkers.push({ x: p.x, y: p.y, color: ser.color, active: ser.active, label: ser.short + ' Tm at ' + sens.hydrations[j] + '% hydration: ' + fmt(p.y, 1) + ' C' });
+      });
+    });
+    setLegend('lab-legend-tm', tmSeries.map(function (ser) { return { name: ser.name, color: ser.color }; }));
+    document.getElementById('lab-chart-tm').innerHTML = labChartSVG({
+      xMin: sens.hydrations[0], xMax: sens.hydrations[sens.hydrations.length - 1], yMin: tmMin, yMax: tmMax,
+      xLabel: 'Hydration (% of dry starch)', yLabel: 'Gelatinization midpoint Tm (deg C)',
+      ariaLabel: 'Starch gelatinization midpoint versus hydration for all four botanical starches',
+      series: tmSeries, markers: tmMarkers
+    });
+
+    var mcols = [{ label: 'Hydration %', key: 'h' }].concat(starchKeys.map(function (k) {
+      return { label: sens.starchTm[k].label.split(' / ')[0], key: k };
+    }));
+    var mrows = sens.hydrations.map(function (h, j) {
+      var row = { h: h };
+      starchKeys.forEach(function (k) { row[k] = fmt(sens.starchTm[k].tm[j], 2); });
+      return row;
+    });
+    var ecols = [{ label: 'Grind (um)', key: 'g' }, { label: 'Yield (%)', key: 'y' }];
+    var erows = sens.espresso.grinds.map(function (g, j) {
+      return { g: fmt(g, 1), y: fmt(sens.espresso.yields[j], 3) };
+    });
+    document.getElementById('lab-matrix-table').innerHTML =
+      '<p class="lab-matrix-title">Starch gelatinization midpoint Tm (deg C) vs hydration</p>' + buildTable(mcols, mrows) +
+      '<p class="lab-matrix-title">Espresso grind-to-yield sensitivity</p>' + buildTable(ecols, erows);
+  }
+
+  if (LAB) {
+    ['json', 'csv', 'md'].forEach(function (fmt2) {
+      document.getElementById('lab-export-' + fmt2).addEventListener('click', function () {
+        var text = fmt2 === 'json' ? LAB.exportJSON(labState())
+          : fmt2 === 'csv' ? '\uFEFF' + LAB.exportCSV(labState())
+          : LAB.exportMarkdown(labState());
+        var mime = fmt2 === 'json' ? 'application/json' : fmt2 === 'csv' ? 'text/csv;charset=utf-8' : 'text/markdown;charset=utf-8';
+        labDownload(text, 'flavorforge-lab-brief.' + fmt2, mime);
+        labFlash('Exported ' + fmt2.toUpperCase() + ' brief stamped with the canonical digest.', true);
+      });
+    });
+    document.getElementById('lab-copy-link').addEventListener('click', function () {
+      var hash = LAB.encodeHash(labState());
+      var base = '';
+      try { base = (location.href || '').split('#')[0]; } catch (e) { /* ignore */ }
+      var link = base + hash;
+      if (typeof history !== 'undefined' && history.replaceState) {
+        try { history.replaceState(null, '', hash); } catch (e2) { /* ignore */ }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(function () {
+          labFlash('Copied the #ff= share link for this lab state.', true);
+        }, function () { labFlash('Copy this #ff= share link: ' + link, true); });
+      } else {
+        labFlash('Copy this #ff= share link: ' + link, true);
+      }
+    });
+    document.getElementById('lab-verify-demo').addEventListener('click', function () {
+      var demo = LAB.tamperDemo(labState());
+      labFlash(
+        'Intact JSON: ' + (demo.intact.ok ? 'verified' : 'REJECTED (' + demo.intact.detail + ')') +
+        '. After one edited field: ' + (demo.tampered.ok ? 'verified (unexpected)' : 'correctly rejected (' + demo.tampered.detail + ')') + '.',
+        demo.ok);
+    });
+    document.getElementById('lab-selftest-run').addEventListener('click', function () {
+      var run = LAB.runSelfTests();
+      var el = document.getElementById('lab-selftest-result');
+      el.textContent = run.passed + '/' + run.total + ' deterministic self-tests passing.';
+      el.className = 'import-status ' + (run.allPassed ? 'ok' : 'bad');
+      document.getElementById('lab-selftest-list').innerHTML =
+        '<table class="data-table"><thead><tr><th scope="col">Result</th><th scope="col">Check</th><th scope="col">Detail</th></tr></thead><tbody>' +
+        run.results.map(function (r) {
+          return '<tr><td class="' + (r.ok ? 'lab-pass' : 'lab-fail') + '">' + (r.ok ? 'PASS' : 'FAIL') + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.detail || 'ok') + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    });
+  }
+
+  // ---- #ff= bookmark restore --------------------------------------------
+  function applyBookmarkHash() {
+    if (!LAB || typeof location === 'undefined' || typeof location.hash !== 'string') { return; }
+    var h = location.hash;
+    if (h.indexOf(LAB.HASH_PREFIX) !== 0) { return; }
+    var status = document.getElementById('control-status');
+    var st = LAB.decodeHash(h);
+    if (!st) {
+      if (status) { status.textContent = 'Ignored a malformed #ff= bookmark hash.'; }
+      return;
+    }
+    try {
+      recipe = F.validateRecipe(Object.assign({}, recipe, { hydrationPct: st.hyd, targetYieldPct: st.yieldT }));
+      view.EaKj = st.EaKj;
+      view.starchProfile = st.starch;
+      view.fermentTempC = st.fermT;
+      labProfileKey = st.profile;
+      if (status) { status.textContent = 'Restored the lab bookmark from the URL hash.'; }
+    } catch (e) {
+      if (status) { status.textContent = 'Ignored a malformed #ff= bookmark hash.'; }
+    }
+  }
+  applyBookmarkHash();
+
+  // ---- graceful lab absence ---------------------------------------------
+  if (!LAB) {
+    var labTab = document.getElementById('tabbtn-process');
+    var labPanel = document.getElementById('tab-process');
+    if (labTab) { labTab.hidden = true; }
+    if (labPanel) { labPanel.hidden = true; }
+  }
 
   // ---- first paint -------------------------------------------------------
   syncControls();

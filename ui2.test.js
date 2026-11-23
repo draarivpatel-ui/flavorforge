@@ -290,7 +290,7 @@ test('the checksum freezes alongside the JSON box while the user edits it', () =
 test('table toggles expose disclosure state and control targets from boot', () => {
   const page = createPage(__dirname);
   const buttons = page.document.querySelectorAll('.table-toggle');
-  assert.equal(buttons.length, 4);
+  assert.equal(buttons.length, 6);
   for (const btn of buttons) {
     const tid = btn.getAttribute('aria-controls');
     assert.ok(tid && page.get(tid), 'aria-controls resolves to ' + tid);

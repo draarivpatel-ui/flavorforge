@@ -86,9 +86,9 @@ test('tabs support click, arrow navigation, and roving keyboard focus', () => {
   assert.equal(page.get('tab-card').hidden, false);
   assert.equal(page.get('tab-lab').hidden, true);
   page.fire(page.get('tabbtn-card'), 'keydown', { code: 'End' });
-  assert.equal(page.get('tabbtn-data').getAttribute('aria-selected'), 'true');
-  assert.equal(page.document.activeElement, page.get('tabbtn-data'));
-  page.fire(page.get('tabbtn-data'), 'keydown', { code: 'Home' });
+  assert.equal(page.get('tabbtn-process').getAttribute('aria-selected'), 'true');
+  assert.equal(page.document.activeElement, page.get('tabbtn-process'));
+  page.fire(page.get('tabbtn-process'), 'keydown', { code: 'Home' });
   assert.equal(page.get('tabbtn-lab').getAttribute('tabindex'), '0');
   assert.equal(page.document.querySelectorAll('.tab[tabindex="0"]').length, 1);
 });

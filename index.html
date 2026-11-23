@@ -54,6 +54,7 @@
   <button role="tab" id="tabbtn-card" aria-controls="tab-card" aria-selected="false" class="tab" data-tab="card" aria-keyshortcuts="4">4. Bench Formula Sheet</button>
   <button role="tab" id="tabbtn-phase" aria-controls="tab-phase" aria-selected="false" class="tab" data-tab="phase" aria-keyshortcuts="5">5. Phase Diagrams</button>
   <button role="tab" id="tabbtn-data" aria-controls="tab-data" aria-selected="false" class="tab" data-tab="data" aria-keyshortcuts="6">6. Recipe JSON</button>
+  <button role="tab" id="tabbtn-process" aria-controls="tab-process" aria-selected="false" class="tab" data-tab="process">7. Process Lab</button>
 </nav>
 
 <main>
@@ -483,6 +484,70 @@
     </div>
   </section>
 
+  <!-- ================= PROCESS & SENSITIVITY LAB ================= -->
+  <section id="tab-process" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-process" hidden>
+    <div class="section-head">
+      <h2>Multi-stage thermal process comparator and sensitivity surfaces</h2>
+      <p>Five staged surface-temperature profiles integrate the exact cumulative Arrhenius dose through the same browning model as the schedule analyzer. The sensitivity surface maps every botanical starch midpoint Tm(H) across hydration and the espresso grind-to-yield response. Every export carries one canonical SHA-256 audit digest. All curves remain teaching approximations.</p>
+    </div>
+
+    <div class="panel chart-panel" id="lab-compare-panel">
+      <h3>Five thermal process profiles</h3>
+      <p class="chart-sub">Conversion X = 1 - exp(-dose) with the dose summed exactly over constant-temperature stages. The yeast margin is the denaturation setpoint 46 C minus the hottest stage. Use marks the profile stored in the share link; Load pushes its stages into the analyzer on tab 1.</p>
+      <div id="lab-profile-table" class="table-wrap"></div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <div>
+          <h3>Browning conversion X(t) for all five profiles</h3>
+          <p class="chart-sub">Exact piecewise Arrhenius dose at every stage boundary. Point markers land on each 50 percent crossing; the dashed line is X = 0.5. Curves and markers are keyboard focusable.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="lab-conversion-table" aria-controls="lab-conversion-table" aria-expanded="false">Show tabular data</button>
+      </div>
+      <div class="legend" id="lab-legend-conv" aria-label="Thermal profile legend"></div>
+      <div id="lab-chart-conversion" class="chart-slot"></div>
+      <div id="lab-conversion-table" class="table-wrap" hidden></div>
+    </div>
+
+    <div class="panel chart-panel">
+      <div class="chart-head">
+        <div>
+          <h3>Starch midpoint Tm(H) sensitivity</h3>
+          <p class="chart-sub">Tm(H) = baseTmC - waterShiftC * H/100 for tapioca, wheat, potato, and rice starch across 40 to 95 percent hydration. The espresso grind response is tabulated below with the matrix.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm table-toggle" type="button" data-table="lab-matrix-table" aria-controls="lab-matrix-table" aria-expanded="false">Show tabular data</button>
+      </div>
+      <div class="legend" id="lab-legend-tm" aria-label="Starch series legend"></div>
+      <div id="lab-chart-tm" class="chart-slot"></div>
+      <div id="lab-matrix-table" class="table-wrap" hidden></div>
+    </div>
+
+    <section class="panel" aria-labelledby="lab-export-heading">
+      <h3 id="lab-export-heading">Audited export brief</h3>
+      <p class="chart-sub">One canonical SHA-256 digest stamps the page fingerprint, the JSON payload, the CSV provenance header, and the Markdown footer. Verify recomputes the embedded payload and the visible content, so any edited number is caught.</p>
+      <p class="checksum-line">SHA-256 <code id="lab-digest"></code></p>
+      <div class="data-actions">
+        <button id="lab-export-json" class="btn btn-ghost btn-sm" type="button">Download JSON</button>
+        <button id="lab-export-csv" class="btn btn-ghost btn-sm" type="button">Download CSV</button>
+        <button id="lab-export-md" class="btn btn-ghost btn-sm" type="button">Download Markdown</button>
+        <button id="lab-copy-link" class="btn btn-ghost btn-sm" type="button">Copy #ff= share link</button>
+        <button id="lab-verify-demo" class="btn btn-sm" type="button">Run verify and tamper demo</button>
+      </div>
+      <div id="lab-export-status" class="import-status" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="lab-selftest-heading">
+      <h3 id="lab-selftest-heading">Deterministic in-page self-tests</h3>
+      <p class="chart-sub">Runs known-answer checks inside this page: SHA-256 vectors, the 150 C half-life calibration, fermentation identities, the espresso solver residual, mass conservation, CSV escaping, tamper detection, and the bookmark round-trip.</p>
+      <div class="data-actions">
+        <button id="lab-selftest-run" class="btn" type="button">Run self-tests</button>
+      </div>
+      <div id="lab-selftest-result" class="import-status" role="status" aria-live="polite"></div>
+      <div id="lab-selftest-list" class="table-wrap"></div>
+    </section>
+  </section>
+
 </main>
 
 <footer class="site-footer">
@@ -491,6 +556,7 @@
 </footer>
 
 <script src="kinetics.js"></script>
+<script src="process-lab.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -591,6 +591,20 @@ textarea { resize: vertical; }
   color: var(--ink-2);
 }
 
+/* ---- Process & Sensitivity Lab ---- */
+.lab-active-row { background: var(--s3-soft); }
+.lab-note { color: var(--muted); font-size: 0.74rem; font-family: var(--font-serif); font-style: italic; }
+.lab-profile-actions { white-space: nowrap; }
+.lab-profile-actions .btn { margin-right: 4px; }
+.lab-curve:focus { outline: none; stroke-width: 4.6; }
+.lab-pt:focus { outline: none; stroke: var(--accent); stroke-width: 3; }
+.lab-curve, .lab-pt { cursor: pointer; }
+.lab-pass { color: var(--good); font-family: var(--font-mono); font-weight: 700; }
+.lab-fail { color: var(--bad); font-family: var(--font-mono); font-weight: 700; }
+#lab-selftest-list .data-table td:first-child { white-space: normal; }
+.lab-matrix-title { font-family: var(--font-serif); font-size: 0.95rem; margin: 14px 0 6px; }
+#lab-digest { word-break: break-all; }
+
 /* ---- Footer ---- */
 .site-footer {
   max-width: 1160px;
@@ -624,7 +638,7 @@ textarea { resize: vertical; }
   }
   body { background: #ffffff; color: #111111; }
   .no-print, .site-header, .tabs, .site-footer, .section-head, .card-toolbar,
-  .chart-head .table-toggle, .ff-tooltip { display: none !important; }
+  .chart-head .table-toggle, .ff-tooltip, #tab-process { display: none !important; }
   main { max-width: none; padding: 0; }
   .tab-panel { display: none !important; }
   .tab-panel.active { display: block !important; }

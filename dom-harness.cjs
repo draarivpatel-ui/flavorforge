@@ -267,7 +267,7 @@ function createPage(directory, options = {}) {
     static now() { return Date.parse('2026-11-15T12:00:00.000Z'); }
   }
   const sandbox = {
-    window, document, navigator, localStorage, location: { search: options.search || '' },
+    window, document, navigator, localStorage, location: { search: options.search || '', hash: options.hash || '' },
     performance: { now: () => now }, Date: FixtureDate, URL: FakeURL, URLSearchParams, Blob, TextEncoder, TextDecoder,
     getComputedStyle: () => ({ getPropertyValue: () => '#333333' }),
     requestAnimationFrame: callback => { animationFrames.push(callback); return animationFrames.length; },
@@ -279,6 +279,7 @@ function createPage(directory, options = {}) {
   for (const script of document.querySelectorAll('script[src]')) {
     const filename = script.getAttribute('src');
     assert.match(filename, /^[a-zA-Z0-9_.-]+\.js$/, 'only local scripts may run');
+    if ((options.skipScripts || []).includes(filename)) continue;
     vm.runInContext(fs.readFileSync(path.join(directory, filename), 'utf8'), context, { filename, timeout: 5000 });
   }
   if (options.loading) { document.readyState = 'complete'; document.dispatchEvent({ type: 'DOMContentLoaded' }); }

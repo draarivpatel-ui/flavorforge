@@ -12,6 +12,7 @@ An offline culinary notebook with recipe scaling, illustrative reaction models, 
 - A starter inspector that includes the starter's flour and water in effective hydration and flour already fermented.
 - A printable formula card, labeled regime maps, self-contained SVG downloads, formula-safe CSV export, and validated recipe JSON with a deterministic SHA-256 checksum.
 - A pinned-reference comparison that snapshots the current configuration and draws ghost curves and markers beside the live ones on every chart.
+- A Process Lab tab ([process-lab.js](process-lab.js)) that compares five staged thermal profiles on exact Arrhenius dose, final conversion, 50% crossing, effective Q10, and yeast denaturation margin; a hydration-by-starch Tm sensitivity surface and espresso grind-to-yield table; canonical SHA-256-stamped JSON, CSV, and Markdown export briefs with one-click tamper verification; compact `#ff=` share links that restore the lab bookmark; and an in-page deterministic self-test runner.
 - Linked hydration controls, keyboard tab navigation, optional themes, a disableable shortcut set (digits 1-6, T, P), and visible input/import errors.
 
 These are teaching approximations. They do not predict a particular food, dough culture, or espresso machine. Thermal models omit heat transfer, moisture loss, pH, and measured ingredient-specific parameters. Maillard browning and sugar caramelization are different reactions. The espresso curve uses grind size only; brew temperature is stored and printed in the recipe.
@@ -99,17 +100,21 @@ Run from this repository:
 node --test
 ```
 
-**190 tests pass, with zero failures or skipped tests.** Coverage includes rate identities, finite-number validation, tiny conversions, underflow regressions, all curve endpoints, recipe bounds and Unicode round-trips, starter mass conservation, fermentation doubling, solver convergence and endpoint honesty, exact schedule integration, reserved ingredient names, exact regime boundaries, deterministic SHA-256 export checksums, formula-safe CSV (injection guard, quoting, BOM), and recipe text-field control-character rejection.
+**392 tests pass, with zero failures or skipped tests.** Coverage includes rate identities, finite-number validation, tiny conversions, underflow regressions, all curve endpoints, recipe bounds and Unicode round-trips, starter mass conservation, fermentation doubling, solver convergence and endpoint honesty, exact schedule integration, reserved ingredient names, exact regime boundaries, deterministic SHA-256 export checksums, formula-safe CSV (injection guard, quoting, BOM), and recipe text-field control-character rejection.
 
-The UI tests execute the actual scripts against [dom-harness.cjs](dom-harness.cjs), with fixed time, optional blocked storage, DOM events, and Blob downloads. They verify HTML references, all four starch series, control synchronization, multiword title editing, fractional imports, invalid-input recovery, keyboard tabs, SVG label styles, schedule actions, pinned-reference ghost series, the dough-temperature phase marker, and clipboard fallback. They do not perform browser layout or visual rendering.
+The Process Lab suite ([process-lab.test.js](process-lab.test.js)) adds exact schedule-dose and 50% crossing checks for all five thermal profiles, dose-weighted effective Q10, yeast margins, the full hydration-by-starch sensitivity grid, baker's mass conservation at formula edges, canonical digest caching and cross-format parity (on-page, JSON, CSV provenance, Markdown footer), tamper detection on every export, hostile-input rejection (non-finite, out-of-range, `-0`, prototype-pollution keys, formula injection, oversized and malformed `#ff=` hashes), base64url codec limits, and the 18-check in-page self-test list.
+
+The UI tests execute the actual scripts against [dom-harness.cjs](dom-harness.cjs), with fixed time, optional blocked storage, DOM events, and Blob downloads. They verify HTML references, all four starch series, control synchronization, multiword title editing, fractional imports, invalid-input recovery, keyboard tabs, SVG label styles, schedule actions, pinned-reference ghost series, the dough-temperature phase marker, and clipboard fallback. The lab UI tests ([lab-ui.test.js](lab-ui.test.js)) additionally verify the comparator table and Load-into-analyzer actions, keyboard-focusable conversion and Tm charts, data-table disclosures, every audited export, the verify/tamper demo, the self-test runner, `#ff=` bookmark restore and rejection, and the graceful hide when `process-lab.js` is absent. They do not perform browser layout or visual rendering.
 
 | File | Purpose |
 | --- | --- |
 | [kinetics.js](kinetics.js) | Pure UMD models, recipe validation, and analysis APIs |
-| [app.js](app.js) | Controls, plots, cards, schedule analyzer, and exports |
+| [process-lab.js](process-lab.js) | Optional UMD Process Lab: profile comparator, sensitivity surface, stamped exports, `#ff=` codec, self-tests |
+| [app.js](app.js) | Controls, plots, cards, schedule analyzer, lab wiring, and exports |
 | [index.html](index.html), [style.css](style.css) | Notebook, responsive layout, and print styles |
 | [test.js](test.js), [regression.test.js](regression.test.js), [extended.test.js](extended.test.js) | Automated verification |
-| [ui.test.js](ui.test.js), [ui2.test.js](ui2.test.js), [dom-harness.cjs](dom-harness.cjs) | DOM/controller verification against the real scripts |
+| [process-lab.test.js](process-lab.test.js) | Process Lab model, export, codec, and hostile-input verification |
+| [ui.test.js](ui.test.js), [ui2.test.js](ui2.test.js), [lab-ui.test.js](lab-ui.test.js), [dom-harness.cjs](dom-harness.cjs) | DOM/controller verification against the real scripts |
 
 ## License
 
