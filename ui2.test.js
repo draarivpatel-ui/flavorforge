@@ -402,3 +402,42 @@ test('every interactive id on the hardened page still resolves cleanly', () => {
   hyd.value = '61'; page.fire(hyd, 'input'); page.flushFrame();
   auditPage(page);
 });
+
+// -- L580 accessibility contract ---------------------------------------------
+
+test('a skip link targets the main landmark before all header navigation', () => {
+  const page = createPage(__dirname);
+  const skip = page.document.querySelector('a.skip-link');
+  assert.ok(skip, 'skip link exists');
+  assert.equal(skip.getAttribute('href'), '#main-content');
+  const main = page.document.querySelector('main#main-content');
+  assert.ok(main, 'main landmark carries the skip target id');
+  assert.equal(main.getAttribute('tabindex'), '-1');
+  const firstElement = page.document.body.children[0];
+  assert.equal(firstElement, skip, 'skip link is the first focusable element in body order');
+});
+
+test('every tab button declares type button explicitly', () => {
+  const page = createPage(__dirname);
+  for (const btn of page.document.querySelectorAll('.tab')) {
+    assert.equal(btn.getAttribute('type'), 'button', btn.id);
+  }
+});
+
+test('the stylesheet contains an explicit reduced-motion override', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'style.css'), 'utf8');
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+  assert.match(css, /animation-duration:\s*0\.01ms\s*!important/);
+  assert.match(css, /transition-duration:\s*0\.01ms\s*!important/);
+  assert.match(css, /scroll-behavior:\s*auto\s*!important/);
+});
+
+test('schedule analysis enforces the 64 KiB cap in UTF-8 bytes', () => {
+  const page = createPage(__dirname);
+  const text = '水'.repeat(22000);
+  assert.ok(text.length < 65536);
+  assert.ok(Buffer.byteLength(text, 'utf8') > 65536);
+  page.get('schedule-json').value = text;
+  page.get('analyze-schedule').click();
+  assert.match(page.get('schedule-summary').textContent, /exceeds 64 KiB/);
+});

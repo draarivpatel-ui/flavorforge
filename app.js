@@ -995,7 +995,7 @@
   document.getElementById('analyze-schedule').addEventListener('click', function () {
     try {
       var text = document.getElementById('schedule-json').value;
-      if (text.length > 65536) throw new RangeError('Schedule JSON exceeds 64 KiB');
+      if (F.utf8ByteLength(text) > 65536) throw new RangeError('Schedule JSON exceeds 64 KiB');
       var stages = JSON.parse(text);
       F.browningSchedule(stages, computeDerived().maillard);
       scheduleStages = stages; scheduleValid = true;

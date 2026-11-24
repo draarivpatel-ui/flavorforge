@@ -871,3 +871,67 @@ test('comparator conversions equal direct browningSchedule fractions at a custom
     close(rows[i].conversionX, F.browningSchedule(p.stages, opts).fraction, 1e-15, p.key);
   });
 });
+
+// -- L580 deterministic export and codec regressions -------------------------
+
+test('conversionCurve reproduces the exact cumulative boundary conversion bit for bit', () => {
+  const stages = [
+    { tempC: 37, durationMin: 1.3 + 0.1 },
+    { tempC: 128, durationMin: 3.1 },
+    { tempC: 219, durationMin: 4.8 }
+  ];
+  const opts = { A: F.constants.MAILLARD_DEFAULT.A, Ea: 100000, refC: 150 };
+  const sched = F.browningSchedule(stages, opts);
+  const times = sched.stages.map(s => s.endMin);
+  const curve = L.conversionCurve(stages, opts, times);
+  sched.stages.forEach((stage, i) => {
+    assert.equal(curve[i].t, stage.endMin);
+    assert.equal(curve[i].x, -Math.expm1(-stage.cumulativeDose), 'boundary ' + stage.endMin);
+  });
+});
+
+test('utf8Decode rejects overlong, surrogate, and out-of-range sequences', () => {
+  for (const bytes of [
+    [0xe0, 0x80, 0x80],
+    [0xed, 0xa0, 0x80],
+    [0xf0, 0x80, 0x80, 0x80],
+    [0xf4, 0x90, 0x80, 0x80]
+  ]) {
+    assert.throws(() => L.utf8Decode(bytes), RangeError, bytes.join(' '));
+  }
+});
+
+test('b64urlDecode rejects nonzero canonical padding bits', () => {
+  assert.equal(L.utf8Decode(L.b64urlDecode('QQ')), 'A');
+  assert.throws(() => L.b64urlDecode('QU'), TypeError);
+  assert.equal(L.utf8Decode(L.b64urlDecode('YWI')), 'ab');
+  assert.throws(() => L.b64urlDecode('YWJ'), TypeError);
+});
+
+test('a mutated stamped report cannot poison later deterministic exports', () => {
+  const st = { hyd: 77 };
+  const stamped = L.stampedReport(st);
+  assert.throws(() => { stamped.report.state.hyd = 1; }, TypeError);
+  assert.throws(() => { stamped.report.thermal[0].conversionX = 0; }, TypeError);
+  const text = L.exportJSON(st);
+  assert.equal(L.verifyExport(text).ok, true);
+  assert.equal(JSON.parse(text).state.hyd, 77);
+});
+
+test('CSV verification rejects version drift, unknown provenance rows, and appended blank rows', () => {
+  const text = L.exportCSV(L.STATE_DEFAULTS);
+  assert.equal(L.verifyExport(text).ok, true);
+  assert.equal(L.verifyExport(text + '\r\n').ok, false, 'extra blank row changes visible CSV content');
+  assert.equal(L.verifyExport(text.replace('flavorforge-lab-audit,version,1', 'flavorforge-lab-audit,version,99')).ok, false, 'version drift');
+  const lines = text.split('\r\n');
+  lines.splice(5, 0, 'flavorforge-lab-audit,comment,unauthenticated');
+  assert.equal(L.verifyExport(lines.join('\r\n')).ok, false, 'unknown provenance row');
+});
+
+test('Markdown verification rejects text injected after the authenticated body', () => {
+  const text = L.exportMarkdown(L.STATE_DEFAULTS);
+  assert.equal(L.verifyExport(text).ok, true);
+  assert.equal(L.verifyExport(text + 'appended attacker text').ok, false, 'append after the payload comment');
+  const injected = text.replace('\n\n<!-- fflab-payload:', '\n\nunauthenticated visible note\n\n<!-- fflab-payload:');
+  assert.equal(L.verifyExport(injected).ok, false, 'insertion between footer and payload comment');
+});

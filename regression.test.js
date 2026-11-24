@@ -280,3 +280,39 @@ test('espresso solver lands on the analytic inverse for a mid-curve target', () 
   const analytic = o.g0 * Math.pow((o.Emax - o.Emin) / (19 - o.Emin) - 1, 1 / o.p);
   close(g, analytic, 0.5);
 });
+
+// -- L580 hardened edge regressions -------------------------------------------
+
+test('recipe numeric fields normalize negative zero before deterministic export', () => {
+  const r = F.createRecipe({ hydrationPct: -0, saltPct: -0, starterPct: -0, targetYieldPct: -0 });
+  for (const field of ['hydrationPct', 'saltPct', 'starterPct', 'targetYieldPct']) {
+    assert.equal(Object.is(r[field], -0), false, field + ' must not remain negative zero');
+  }
+  assert.deepEqual(F.importRecipe(F.exportRecipe(r)), r);
+});
+
+test('recipe imports enforce the 64 KiB cap in UTF-8 bytes, not UTF-16 units', () => {
+  const text = '水'.repeat(22000);
+  assert.ok(text.length < 65536, 'fixture stays below the UTF-16 length cap');
+  assert.ok(Buffer.byteLength(text, 'utf8') > 65536, 'fixture exceeds the byte cap');
+  assert.throws(() => F.importRecipe(text), RangeError);
+});
+
+test('utf8ByteLength matches the host UTF-8 byte count including astral text', () => {
+  for (const text of ['', 'ascii', 'café 水', '𝕏 plane one', 'lone\ud800 surrogate']) {
+    assert.equal(F.utf8ByteLength(text), Buffer.byteLength(text, 'utf8'), JSON.stringify(text));
+  }
+});
+
+test('recipe text limits count Unicode code points rather than UTF-16 halves', () => {
+  assert.doesNotThrow(() => F.createRecipe({ name: '🥯'.repeat(120) }));
+  assert.throws(() => F.createRecipe({ name: '🥯'.repeat(121) }), RangeError);
+  assert.doesNotThrow(() => F.createRecipe({ notes: '🥯'.repeat(4000) }));
+  assert.throws(() => F.createRecipe({ notes: '🥯'.repeat(4001) }), RangeError);
+});
+
+test('createRecipe rejects malformed override containers instead of ignoring them', () => {
+  for (const bad of ['sourdough', 42, true, []]) {
+    assert.throws(() => F.createRecipe(bad), TypeError, String(bad));
+  }
+});

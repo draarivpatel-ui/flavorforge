@@ -31,6 +31,31 @@
     return typeof x === 'number' && isFinite(x);
   }
 
+  function unicodeLength(text) {
+    return Array.from(String(text)).length;
+  }
+
+  // UTF-8 byte count with lone surrogates replaced by U+FFFD, matching
+  // TextEncoder semantics without depending on TextEncoder being present.
+  function utf8ByteLength(text) {
+    var s = String(text);
+    var length = 0;
+    for (var i = 0; i < s.length; i++) {
+      var code = s.charCodeAt(i);
+      if (code < 0x80) {
+        length += 1;
+      } else if (code < 0x800) {
+        length += 2;
+      } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < s.length && s.charCodeAt(i + 1) >= 0xdc00 && s.charCodeAt(i + 1) <= 0xdfff) {
+        length += 4;
+        i++;
+      } else {
+        length += 3;
+      }
+    }
+    return length;
+  }
+
   function finite(x, label) {
     if (!isFiniteNumber(x)) throw new TypeError(label + ' must be a finite number');
     return x;
@@ -203,11 +228,12 @@
       var startMin = totalMin;
       var rate = maillardRate(stage.tempC, opts);
       var stageDose = finiteResult(rate * stage.durationMin);
+      var startDose = dose;
       if (timeTo50Min === null && rate > 0 && dose < Math.LN2 && dose + stageDose >= Math.LN2) timeTo50Min = startMin + (Math.LN2 - dose) / rate;
       dose = finiteResult(dose + stageDose);
       totalMin = finiteResult(totalMin + stage.durationMin);
       if (totalMin > 1440) throw new RangeError('schedule duration must not exceed 1440 minutes');
-      return { index: index, tempC: stage.tempC, durationMin: stage.durationMin, startMin: startMin, endMin: totalMin, rate: rate, cumulativeDose: dose, fraction: -Math.expm1(-dose) };
+      return { index: index, tempC: stage.tempC, durationMin: stage.durationMin, startMin: startMin, endMin: totalMin, rate: rate, startDose: startDose, cumulativeDose: dose, fraction: -Math.expm1(-dose) };
     });
     return { stages: rows, totalMin: totalMin, totalDose: dose, fraction: -Math.expm1(-dose), timeTo50Min: timeTo50Min };
   }
@@ -606,6 +632,9 @@
   var RECIPE_STYLES = ['sourdough', 'boba', 'espresso', 'hybrid'];
 
   function createRecipe(overrides) {
+    if (overrides !== undefined && overrides !== null && (typeof overrides !== 'object' || Array.isArray(overrides))) {
+      throw new TypeError('createRecipe: overrides must be an object');
+    }
     var base = {
       schema: RECIPE_SCHEMA,
       version: RECIPE_VERSION,
@@ -651,14 +680,14 @@
         }
         var limits = RECIPE_LIMITS[f];
         if (v < limits[0] || v > limits[1]) throw new RangeError('validateRecipe: ' + f + ' must be between ' + limits[0] + ' and ' + limits[1]);
-        out[f] = v;
+        out[f] = v === 0 ? 0 : v;
       } else {
         if (typeof v !== 'string') {
           throw new TypeError('validateRecipe: field ' + f + ' must be a string');
         }
         if (f === 'style' && RECIPE_STYLES.indexOf(v) === -1) throw new TypeError('validateRecipe: unsupported style');
-        if (f === 'name' && (!v.trim() || v.length > 120 || /[\x00-\x1f\x7f-\x9f]/.test(v))) throw new RangeError('recipe name needs 1 to 120 characters without control characters');
-        if (f === 'notes' && (v.length > 4000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(v))) throw new RangeError('recipe notes need at most 4000 characters without control characters');
+        if (f === 'name' && (!v.trim() || unicodeLength(v) > 120 || /[\x00-\x1f\x7f-\x9f]/.test(v))) throw new RangeError('recipe name needs 1 to 120 characters without control characters');
+        if (f === 'notes' && (unicodeLength(v) > 4000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(v))) throw new RangeError('recipe notes need at most 4000 characters without control characters');
         out[f] = f === 'name' ? v.trim() : v;
       }
     });
@@ -673,7 +702,7 @@
     if (typeof text !== 'string') {
       throw new TypeError('importRecipe: expected a JSON string');
     }
-    if (text.length > 65536) throw new RangeError('recipe JSON exceeds 64 KiB');
+    if (utf8ByteLength(text) > 65536) throw new RangeError('recipe JSON exceeds 64 KiB');
     var parsed = JSON.parse(text); // throws SyntaxError on malformed JSON
     return validateRecipe(parsed);
   }
@@ -749,6 +778,7 @@
     exportRecipe: exportRecipe,
     importRecipe: importRecipe,
     sha256: sha256,
+    utf8ByteLength: utf8ByteLength,
     csvEscape: csvEscape,
     toCSV: toCSV,
     recipeCSV: recipeCSV,

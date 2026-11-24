@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
 <div id="chart-tooltip" class="ff-tooltip" role="status" aria-live="polite" hidden></div>
 
@@ -48,16 +49,16 @@
 <p id="control-status" class="control-status" role="status" aria-live="polite"></p>
 
 <nav class="tabs" role="tablist" aria-label="Laboratory notebook sections">
-  <button role="tab" id="tabbtn-lab" aria-controls="tab-lab" aria-selected="true" class="tab active" data-tab="lab" aria-keyshortcuts="1">1. Maillard Kinetics</button>
-  <button role="tab" id="tabbtn-dough" aria-controls="tab-dough" aria-selected="false" class="tab" data-tab="dough" aria-keyshortcuts="2">2. Starch &amp; Fermentation</button>
-  <button role="tab" id="tabbtn-espresso" aria-controls="tab-espresso" aria-selected="false" class="tab" data-tab="espresso" aria-keyshortcuts="3">3. Espresso Extraction</button>
-  <button role="tab" id="tabbtn-card" aria-controls="tab-card" aria-selected="false" class="tab" data-tab="card" aria-keyshortcuts="4">4. Bench Formula Sheet</button>
-  <button role="tab" id="tabbtn-phase" aria-controls="tab-phase" aria-selected="false" class="tab" data-tab="phase" aria-keyshortcuts="5">5. Phase Diagrams</button>
-  <button role="tab" id="tabbtn-data" aria-controls="tab-data" aria-selected="false" class="tab" data-tab="data" aria-keyshortcuts="6">6. Recipe JSON</button>
-  <button role="tab" id="tabbtn-process" aria-controls="tab-process" aria-selected="false" class="tab" data-tab="process">7. Process Lab</button>
+  <button type="button" role="tab" id="tabbtn-lab" aria-controls="tab-lab" aria-selected="true" class="tab active" data-tab="lab" aria-keyshortcuts="1">1. Maillard Kinetics</button>
+  <button type="button" role="tab" id="tabbtn-dough" aria-controls="tab-dough" aria-selected="false" class="tab" data-tab="dough" aria-keyshortcuts="2">2. Starch &amp; Fermentation</button>
+  <button type="button" role="tab" id="tabbtn-espresso" aria-controls="tab-espresso" aria-selected="false" class="tab" data-tab="espresso" aria-keyshortcuts="3">3. Espresso Extraction</button>
+  <button type="button" role="tab" id="tabbtn-card" aria-controls="tab-card" aria-selected="false" class="tab" data-tab="card" aria-keyshortcuts="4">4. Bench Formula Sheet</button>
+  <button type="button" role="tab" id="tabbtn-phase" aria-controls="tab-phase" aria-selected="false" class="tab" data-tab="phase" aria-keyshortcuts="5">5. Phase Diagrams</button>
+  <button type="button" role="tab" id="tabbtn-data" aria-controls="tab-data" aria-selected="false" class="tab" data-tab="data" aria-keyshortcuts="6">6. Recipe JSON</button>
+  <button type="button" role="tab" id="tabbtn-process" aria-controls="tab-process" aria-selected="false" class="tab" data-tab="process">7. Process Lab</button>
 </nav>
 
-<main>
+<main id="main-content" tabindex="-1">
 
   <!-- ================= REACTION LAB ================= -->
   <section id="tab-lab" class="tab-panel active" role="tabpanel" aria-labelledby="tabbtn-lab">

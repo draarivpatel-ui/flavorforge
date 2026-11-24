@@ -198,7 +198,10 @@
     for (var i = 0; i < sched.stages.length; i++) {
       var s = sched.stages[i];
       if (t >= s.endMin) { dose = s.cumulativeDose; continue; }
-      if (t > s.startMin) { dose = s.cumulativeDose - s.rate * s.durationMin + s.rate * (t - s.startMin); }
+      if (t > s.startMin) {
+        var startDose = isFiniteNumber(s.startDose) ? s.startDose : s.cumulativeDose - s.rate * s.durationMin;
+        dose = startDose + s.rate * (t - s.startMin);
+      }
       break;
     }
     return dose;
@@ -215,18 +218,8 @@
       finite(t, 'sample time');
       return Math.min(sched.totalMin, Math.max(0, t));
     }).sort(function (a, b) { return a - b; });
-    var stageIndex = 0, doseBefore = 0;
     return sorted.map(function (t) {
-      while (stageIndex < sched.stages.length && t > sched.stages[stageIndex].endMin) {
-        doseBefore = sched.stages[stageIndex].cumulativeDose;
-        stageIndex++;
-      }
-      var dose = doseBefore;
-      if (stageIndex < sched.stages.length) {
-        var s = sched.stages[stageIndex];
-        if (t > s.startMin) dose = s.cumulativeDose - s.rate * s.durationMin + s.rate * (t - s.startMin);
-      }
-      return { t: t, x: -Math.expm1(-dose) };
+      return { t: t, x: -Math.expm1(-doseAt(sched, t)) };
     });
   }
 
@@ -410,6 +403,14 @@
   var briefCache = new Map();
   var CACHE_LIMIT = 64;
 
+  function deepFreeze(value) {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+      Object.keys(value).forEach(function (key) { deepFreeze(value[key]); });
+      Object.freeze(value);
+    }
+    return value;
+  }
+
   function stampedReport(state) {
     var st = normalizeState(state);
     var key = canonicalize(st);
@@ -417,7 +418,7 @@
     if (hit) return hit;
     var report = buildReport(st);
     var canonical = canonicalize(report);
-    var entry = { report: report, canonical: canonical, digest: needF().sha256(canonical) };
+    var entry = { report: deepFreeze(report), canonical: canonical, digest: needF().sha256(canonical) };
     if (briefCache.size >= CACHE_LIMIT) {
       briefCache.delete(briefCache.keys().next().value);
     }
@@ -465,6 +466,10 @@
         if ((cb & 0xc0) !== 0x80) throw new RangeError('invalid UTF-8 continuation byte');
         code = (code << 6) | (cb & 63);
       }
+      var minimum = extra === 1 ? 0x80 : (extra === 2 ? 0x800 : 0x10000);
+      if (code < minimum || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) {
+        throw new RangeError('invalid UTF-8 code point');
+      }
       if (code <= 0xffff) {
         out += String.fromCharCode(code);
       } else {
@@ -499,6 +504,8 @@
     for (var i = 0; i < str.length; i += 4) {
       var chunk = str.slice(i, i + 4);
       var vals = chunk.split('').map(function (c) { return B64_ALPHABET.indexOf(c); });
+      if (chunk.length === 2 && (vals[1] & 15) !== 0) throw new TypeError('non-canonical base64url padding bits');
+      if (chunk.length === 3 && (vals[2] & 3) !== 0) throw new TypeError('non-canonical base64url padding bits');
       var b0 = (vals[0] << 2) | (vals[1] >> 4);
       bytes.push(b0);
       if (chunk.length > 2) bytes.push(((vals[1] & 15) << 4) | (vals[2] >> 2));
@@ -606,10 +613,10 @@
     var FF = needF();
     var stamped = stampedReport(state);
     var dataRows = labDataRows(stamped.report);
-    var contentText = dataRows.map(function (row) {
+    var dataText = dataRows.map(function (row) {
       return row.map(function (cell) { return FF.csvEscape(cell); }).join(',');
-    }).join('\r\n');
-    var contentDigest = FF.sha256(contentText);
+    }).join('\r\n') + '\r\n';
+    var contentDigest = FF.sha256(dataText);
     var meta = [
       ['flavorforge-lab-audit', 'schema', SCHEMA],
       ['flavorforge-lab-audit', 'version', VERSION],
@@ -617,9 +624,7 @@
       ['flavorforge-lab-audit', 'payload', b64urlEncode(stamped.canonical)],
       ['flavorforge-lab-audit', 'content_sha256', contentDigest]
     ];
-    return FF.toCSV(meta) + dataRows.map(function (row) {
-      return row.map(function (cell) { return FF.csvEscape(cell); }).join(',');
-    }).join('\r\n') + '\r\n';
+    return FF.toCSV(meta) + dataText;
   }
 
   function exportMarkdown(state) {
@@ -729,19 +734,32 @@
   }
 
   function csvMeta(text) {
+    var lines = String(text).split('\r\n');
     var meta = {};
-    String(text).split('\r\n').forEach(function (line) {
-      var parts = line.split(',');
-      if (parts.length >= 3 && parts[0] === 'flavorforge-lab-audit') {
-        meta[parts[1]] = parts.slice(2).join(',');
-      }
-    });
-    return meta;
+    var keys = [];
+    var metaLines = 0;
+    while (metaLines < lines.length && lines[metaLines].indexOf('flavorforge-lab-audit,') === 0) {
+      var parts = lines[metaLines].split(',');
+      if (parts.length < 3) return { error: 'malformed provenance row' };
+      var key = parts[1];
+      if (hasOwn.call(meta, key)) return { error: 'duplicate provenance row' };
+      meta[key] = parts.slice(2).join(',');
+      keys.push(key);
+      metaLines++;
+    }
+    return { meta: meta, keys: keys, dataText: lines.slice(metaLines).join('\r\n') };
   }
 
   function verifyCSV(text, FF) {
-    var meta = csvMeta(text);
+    var parsedMeta = csvMeta(text);
+    if (parsedMeta.error) return { ok: false, format: 'csv', detail: parsedMeta.error };
+    var meta = parsedMeta.meta;
+    var expectedKeys = ['schema', 'version', 'sha256', 'payload', 'content_sha256'];
+    if (parsedMeta.keys.length !== expectedKeys.length || !expectedKeys.every(function (key) { return parsedMeta.keys.indexOf(key) !== -1; })) {
+      return { ok: false, format: 'csv', detail: 'provenance rows do not match the audit schema' };
+    }
     if (meta.schema !== SCHEMA) return { ok: false, format: 'csv', detail: 'schema mismatch' };
+    if (meta.version !== String(VERSION)) return { ok: false, format: 'csv', detail: 'version mismatch' };
     if (!/^[0-9a-f]{64}$/.test(meta.sha256 || '') || !/^[0-9a-f]{64}$/.test(meta.content_sha256 || '')) {
       return { ok: false, format: 'csv', detail: 'missing or malformed digest stamps' };
     }
@@ -756,10 +774,7 @@
       return { ok: false, format: 'csv', digest: meta.sha256, detail: 'embedded payload is unreadable' };
     }
     var payloadDigest = FF.sha256(payloadText);
-    var dataText = text.split('\r\n').filter(function (line) {
-      return line.length && line.indexOf('flavorforge-lab-audit,') !== 0;
-    }).join('\r\n');
-    var contentDigest = FF.sha256(dataText);
+    var contentDigest = FF.sha256(parsedMeta.dataText);
     var ok = payloadDigest === meta.sha256 && contentDigest === meta.content_sha256;
     return {
       ok: ok, format: 'csv', digest: meta.sha256, recomputed: payloadDigest, contentDigest: contentDigest,
@@ -769,15 +784,14 @@
   }
 
   function verifyMarkdown(text, FF) {
-    var shaMatch = /\nSHA-256: ([0-9a-f]{64})\b/.exec('\n' + text);
-    var metaMatch = /<!--\s*fflab-payload:([A-Za-z0-9_-]+)\s+fflab-content:([0-9a-f]{64})\s*-->/.exec(text);
-    if (!shaMatch || !metaMatch) {
-      return { ok: false, format: 'markdown', detail: 'missing SHA-256 footer or payload comment' };
+    var metaMatch = /\n\nSHA-256: ([0-9a-f]{64})\n\n<!-- fflab-payload:([A-Za-z0-9_-]+) fflab-content:([0-9a-f]{64}) -->\n$/.exec(text);
+    if (!metaMatch) {
+      return { ok: false, format: 'markdown', detail: 'missing or nonterminal SHA-256 footer and payload comment' };
     }
-    var stampedDigest = shaMatch[1], contentStamp = metaMatch[2];
+    var stampedDigest = metaMatch[1], contentStamp = metaMatch[3];
     var payloadText;
     try {
-      payloadText = utf8Decode(b64urlDecode(metaMatch[1]));
+      payloadText = utf8Decode(b64urlDecode(metaMatch[2]));
       if (canonicalize(JSON.parse(payloadText)) !== payloadText) {
         return { ok: false, format: 'markdown', digest: stampedDigest, detail: 'embedded payload is not canonical' };
       }
@@ -785,12 +799,7 @@
       return { ok: false, format: 'markdown', digest: stampedDigest, detail: 'embedded payload is unreadable' };
     }
     var payloadDigest = FF.sha256(payloadText);
-    var marker = '\n\nSHA-256: ' + stampedDigest;
-    var shaIndex = text.lastIndexOf(marker);
-    if (shaIndex === -1) {
-      return { ok: false, format: 'markdown', digest: stampedDigest, detail: 'SHA-256 footer is not on its own line' };
-    }
-    var contentDigest = FF.sha256(text.slice(0, shaIndex));
+    var contentDigest = FF.sha256(text.slice(0, metaMatch.index));
     var ok = payloadDigest === stampedDigest && contentDigest === contentStamp;
     return {
       ok: ok, format: 'markdown', digest: stampedDigest, recomputed: payloadDigest, contentDigest: contentDigest,
