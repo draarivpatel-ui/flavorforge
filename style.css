@@ -686,3 +686,27 @@ textarea { resize: vertical; }
   .ff-mark-label, .ff-end-label { fill: #222222 !important; }
   .ff-chart > rect:first-child, .ff-phase > rect:first-child { fill: #ffffff !important; }
 }
+
+@media print {
+  @page { margin: 12mm; }
+  .table-wrap,
+  .json-area,
+  .schema-block {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .json-area,
+  .schema-block {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    display: none !important;
+  }
+
+  table { min-width: 0 !important; font-size: 8.5pt; }
+  th, td { overflow-wrap: anywhere; padding: 3px 5px !important; }
+}
