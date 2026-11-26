@@ -569,8 +569,10 @@
     var s = String(value);
     // A payload hidden behind whitespace or invisible format chars stays
     // guarded: the apostrophe lands first, so trimming still sees a literal.
-    var first = s.replace(/^[\s\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF\uFFF9-\uFFFB]+/, '').charAt(0);
-    if (first !== '' && '=+-@'.indexOf(first) !== -1) { s = "'" + s; }
+    var lead = (/^[\s\p{Cf}\p{Cc}]*/u.exec(s) || [''])[0];
+    var first = s.charAt(lead.length);
+    var plainNumber = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(s.slice(lead.length));
+    if (lead.length > 0 || (first !== '' && '=+-@'.indexOf(first) !== -1 && !(first === '-' && plainNumber))) { s = "'" + s; }
     if (/[",\n\r]/.test(s)) { s = '"' + s.replace(/"/g, '""') + '"'; }
     return s;
   }

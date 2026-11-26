@@ -75,7 +75,7 @@ test('csvEscape still guards formula chars hidden behind whitespace', () => {
   assert.equal(F.csvEscape(' =SUM(1)'), "' =SUM(1)");
   assert.equal(F.csvEscape('  +x'), "'  +x");
   assert.equal(F.csvEscape('\t =cmd'), "'\t =cmd");
-  assert.equal(F.csvEscape('   '), '   ');
+  assert.equal(F.csvEscape('   '), "'   ");
   assert.equal(F.csvEscape('plain text'), 'plain text');
 });
 
